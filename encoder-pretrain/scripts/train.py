@@ -117,8 +117,8 @@ def main():
     )
 
     #model = CustomBertForMaskedLM.from_config(cfg)
-    config = AutoConfig.from_pretrained(cfg["model_name"])
-    model = AutoModelForMaskedLM.from_config(config)
+    bert_config = AutoConfig.from_pretrained(cfg["model_name"])
+    model = AutoModelForMaskedLM.from_config(bert_config)
     
     model
 
@@ -189,7 +189,7 @@ def main():
     print(f"Total elements: {cfg['total_elements']}\n")
 
     # Print out final config
-    for k, v in config.items():
+    for k, v in cfg.items():
         print(f"{k:>15}: {v:>10}")
   
     print("=============================\n")
@@ -197,7 +197,7 @@ def main():
     # Format the cfg learning rate as a scientific notation string like 5e-4
     lr_str = '{:.4e}'.format(cfg['learning_rate'])
 
-    run_name = f"{cfg['total_elements']} - bert scratch - h{config.hidden_size} - l{config.num_hidden_layers} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+    run_name = f"{cfg['total_elements']} - bert scratch - h{cfg.hidden_size} - l{cfg.num_hidden_layers} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
 
     wandb.init(
         project="encoder-pretrain", 
