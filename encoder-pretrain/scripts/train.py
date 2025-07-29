@@ -192,14 +192,14 @@ def main():
         dense_str = str(cfg.num_dense_layers) + "mha + "
 
         # If no output subspace is used, the dimension will show as -1.
-        attn_str = dense_str + "mla." + str(cfg.q_proj_dim) + "." + str(cfg.kv_proj_dim) + "." + str(cfg.o_proj_dim)
+        attn_str = dense_str + "mla." + str(cfg.q_lora_rank) + "." + str(cfg.kv_lora_rank) + "." + str(cfg.o_lora_rank)
     else:
         attn_str = "mha"
 
     # MLP Configuration
     if cfg.use_decomp_mlp:
         # Specify the number of dense mlps and their size.
-        dense_str = str(cfg.num_dense_layers) + "mlp." + str(cfg.dense_mlp_size) + " + "
+        dense_str = str(cfg.num_dense_layers) + "mlp." + str(cfg.intermediate_size) + " + "
 
         # Specify the neuron count and latent dimension of the decomposed mlps.
         mlp_str = dense_str + "dcmp." + str(cfg.mlp_num_neurons) + "." + str(cfg.mlp_latent_dim)
