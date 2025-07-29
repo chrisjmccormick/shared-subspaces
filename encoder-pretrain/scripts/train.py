@@ -146,43 +146,6 @@ def main():
     
     model
 
-    training_args = TrainingArguments(
-        output_dir=cfg["output_dir"],
-        
-        per_device_train_batch_size=cfg["train_batch_size"],
-        per_device_eval_batch_size=cfg["eval_batch_size"],
-        
-        fp16=cfg.get("fp16", False),
-        
-        learning_rate=cfg["learning_rate"],
-        num_train_epochs=cfg["num_train_epochs"],
-        
-        # Evaluate every xx steps
-        # Recent versions changed from 'evaluation_strategy'
-        eval_strategy="steps", 
-        eval_steps=cfg.get("eval_steps", 500), # Default to 500
-        
-        logging_steps=50,
-        
-        # Checkpoint saving
-        save_steps=500,
-        save_total_limit=2,           # Optional: keeps last 2 checkpoints
-        save_strategy="steps",
-        report_to=["wandb"],
-        remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
-    )
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=tokenized["train"],
-        eval_dataset=tokenized["validation"],
-        
-        # New argument, allows for other modalities.
-        processing_class=tokenizer,
-        
-        data_collator=data_collator,
-    )
 
     print("\n======== Config File ========")
     print(json.dumps(cfg, indent=2))
@@ -227,6 +190,45 @@ def main():
         project="encoder-pretrain", 
         name=run_name,
         config=cfg
+    )
+
+    training_args = TrainingArguments(
+        output_dir=cfg["output_dir"],
+        
+        per_device_train_batch_size=cfg["train_batch_size"],
+        per_device_eval_batch_size=cfg["eval_batch_size"],
+        
+        fp16=cfg.get("fp16", False),
+        
+        learning_rate=cfg["learning_rate"],
+        num_train_epochs=cfg["num_train_epochs"],
+        
+        # Evaluate every xx steps
+        # Recent versions changed from 'evaluation_strategy'
+        eval_strategy="steps", 
+        eval_steps=cfg.get("eval_steps", 500), # Default to 500
+        
+        logging_steps=50,
+        
+        # Checkpoint saving
+        save_steps=500,
+        save_total_limit=2,           # Optional: keeps last 2 checkpoints
+        save_strategy="steps",
+        report_to=["wandb"],
+        run_name=run_name,
+        remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized["train"],
+        eval_dataset=tokenized["validation"],
+        
+        # New argument, allows for other modalities.
+        processing_class=tokenizer,
+        
+        data_collator=data_collator,
     )
 
     # =====================
