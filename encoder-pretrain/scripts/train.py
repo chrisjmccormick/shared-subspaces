@@ -179,16 +179,45 @@ def main():
   
     print("=============================\n")
 
-    # Format the cfg learning rate as a scientific notation string like 5e-4
-    lr_str = '{:.4e}'.format(cfg['learning_rate'])
 
-    run_name = f"{cfg['total_elements']} - bert scratch - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+    # ========================================
+    #   Format Settings for WandB Run Name
+    # ========================================
+    
+    # Format the cfg learning rate as a scientific notation string like 5e-4
+    lr_str = '{:.0e}'.format(cfg['learning_rate'])
+
+    # Attention configuration
+    if cfg.use_mla:
+        dense_str = str(cfg.num_dense_layers) + "mha + "
+
+        # If no output subspace is used, the dimension will show as -1.
+        attn_str = dense_str + "mla." + str(cfg.q_proj_dim) + "." + str(cfg.kv_proj_dim) + "." + str(cfg.o_proj_dim)
+    else:
+        attn_str = "mha"
+
+    # MLP Configuration
+    if cfg.use_decomp_mlp:
+        # Specify the number of dense mlps and their size.
+        dense_str = str(cfg.num_dense_layers) + "mlp." + str(cfg.dense_mlp_size) + " + "
+
+        # Specify the neuron count and latent dimension of the decomposed mlps.
+        mlp_str = dense_str + "dcmp." + str(cfg.mlp_num_neurons) + "." + str(cfg.mlp_latent_dim)
+    else:
+        mlp_str = "mlp." + str(cfg.mlp_num_neurons)
+
+
+    run_name = f"{cfg['total_elements']} - {attn_str} - {mlp_str} - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
 
     wandb.init(
         project="encoder-pretrain", 
         name=run_name,
         config=cfg
     )
+
+    # ===============================
+    #       Training Arguments
+    # ===============================
 
     training_args = TrainingArguments(
         output_dir=cfg["output_dir"],
@@ -217,6 +246,9 @@ def main():
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
     )
 
+    # ===============================
+    #           Trainer
+    # ===============================
     trainer = Trainer(
         model=model,
         args=training_args,

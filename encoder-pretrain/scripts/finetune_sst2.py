@@ -7,12 +7,18 @@ from torch.utils.data import DataLoader, Subset
 
 from datasets import load_dataset
 from transformers import AutoTokenizer, get_scheduler
-from transformers import BertForSequenceClassification
+
 from tqdm import tqdm
 from sklearn.metrics import matthews_corrcoef
 
-#from models.custom_bert_full import CustomBertForMaskedLM
+# For testing the transformers implementation:
 from transformers.modeling_outputs import SequenceClassifierOutput
+from transformers import BertForSequenceClassification
+
+# For testing our custom implementation:
+
+
+#from models.custom_bert_full import CustomBertForMaskedLM
 
 """
 class CustomBertForSequenceClassification(nn.Module):
@@ -36,9 +42,11 @@ class CustomBertForSequenceClassification(nn.Module):
 
 """
 
+# Filter out some unhelpful warnings cluttering the output.
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+# Wrapt the tokenizer so that we can use dataset.map further down.
 def tokenize_fn(example, tokenizer, max_length=128):
     return tokenizer(
         example["sentence"],
@@ -47,11 +55,11 @@ def tokenize_fn(example, tokenizer, max_length=128):
         max_length=max_length,
     )
 
-
+# Flat accuracy.
 def compute_accuracy(preds, labels):
     return (preds == labels).sum() / len(labels)
 
-
+# Evaluate model on dataset in `dataloader`
 def run_eval(model, dataloader, device):
     model.eval()
     all_preds, all_labels = [], []
@@ -68,9 +76,12 @@ def run_eval(model, dataloader, device):
     mcc = matthews_corrcoef(labels, preds)
     return acc, mcc
 
-
+# =================
+#      Main
+# =================
 def main():
 
+    # Checkpoints are saved here.
     model_path = "/content/shared-subspaces/encoder-pretrain/checkpoints/baseline/"
 
     # Confirm directory exists
@@ -85,9 +96,16 @@ def main():
         "max_length": 128,
     }
 
-    wandb.init(project="encoder-pretrain", name="finetune-cola", config=config)
+    # TODO... We need a way to pass the configuration string from the 
+    # checkpoint to this script.
+    wandb.init(
+        project="encoder-pretrain", 
+        name="finetune-cola", 
+        config=config
+    )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     
     #dataset = load_dataset("glue", "cola")
