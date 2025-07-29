@@ -20,7 +20,9 @@ from transformers import AutoModelForMaskedLM, AutoConfig
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 print("PROJECT_ROOT", PROJECT_ROOT)
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -86,7 +88,6 @@ def main():
     wandb_api_key = os.environ.get("WANDB_API_KEY")
     if wandb_api_key:
         wandb.login(key=wandb_api_key)
-    wandb.init(project="encoder-pretrain", config=cfg)
 
     # Load tokenizer and dataset
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
@@ -183,9 +184,9 @@ def main():
     for p_name, p in params:
         total_params += p.numel()
 
-    config["total_elements"] = format_size(total_params)
+    cfg["total_elements"] = format_size(total_params)
 
-    print(f"Total elements: {config['total_elements']}\n")
+    print(f"Total elements: {cfg['total_elements']}\n")
 
     # Print out final config
     for k, v in config.items():
@@ -193,18 +194,30 @@ def main():
   
     print("=============================\n")
 
+    # Format the cfg learning rate as a scientific notation string like 5e-4
+    lr_str = '{:.4e}'.format(cfg['learning_rate'])
+
+    run_name = f"{cfg['total_elements']} - bert scratch - h{config.hidden_size} - l{config.num_hidden_layers} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+
+    wandb.init(
+        project="encoder-pretrain", 
+        run_name=run_name,
+        config=cfg
+    )
 
     # =====================
     #     Run Training
     # =====================
 
-
-    trainer.train()
-    metrics = trainer.evaluate()
-    wandb.log(metrics)
-
-    trainer.save_model(cfg["output_dir"])
-
+    try {
+        trainer.train()
+        metrics = trainer.evaluate()
+        wandb.log(metrics)
+    }
+    finally {
+        wandb.finish()
+        trainer.save_model(cfg["output_dir"])
+    }
 
 if __name__ == "__main__":
     main()
