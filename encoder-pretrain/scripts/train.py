@@ -85,6 +85,8 @@ def main():
         per_device_train_batch_size=cfg["train_batch_size"],
         per_device_eval_batch_size=cfg["eval_batch_size"],
         
+        fp16=cfg.get("fp16", False),
+        
         learning_rate=cfg["learning_rate"],
         num_train_epochs=cfg["num_train_epochs"],
         
@@ -108,9 +110,16 @@ def main():
         args=training_args,
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["validation"],
-        tokenizer=tokenizer,
+        
+        # New argument, allows for other modalities.
+        processing_class=tokenizer,
+        
         data_collator=data_collator,
     )
+
+    print("\n======== Config File ========")
+    print(json.dumps(cfg, indent=2))
+    print("=============================\n")
 
     trainer.train()
     metrics = trainer.evaluate()
