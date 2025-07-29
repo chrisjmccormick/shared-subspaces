@@ -89,7 +89,8 @@ def main():
         num_train_epochs=cfg["num_train_epochs"],
         
         # Evaluate every xx steps
-        evaluation_strategy="steps",
+        # Recent versions changed from 'evaluation_strategy'
+        eval_strategy="steps", 
         eval_steps=cfg.get("eval_steps", 500), # Default to 500
         
         logging_steps=50,
