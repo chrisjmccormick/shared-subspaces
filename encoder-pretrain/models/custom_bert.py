@@ -51,6 +51,8 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import apply_chunking_to_forward, find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import ModelOutput, auto_docstring, get_torch_version, logging
 from .configuration_bert import BertConfig
+from .layers.mla_attention import DeepseekV3Attention
+from .layers.configuration_deepseek_v3 import DeepseekV3Config
 
 
 
@@ -446,15 +448,29 @@ class BertSelfOutput(nn.Module):
 BERT_SELF_ATTENTION_CLASSES = {
     "eager": BertSelfAttention,
     "sdpa": BertSdpaSelfAttention,
+    "mla": DeepseekV3Attention,
 }
 
 
 class BertAttention(nn.Module):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
-        self.self = BERT_SELF_ATTENTION_CLASSES[config._attn_implementation](
-            config, position_embedding_type=position_embedding_type
-        )
+        attn_cls = BERT_SELF_ATTENTION_CLASSES[config._attn_implementation]
+        if attn_cls is DeepseekV3Attention:
+            ds_config = DeepseekV3Config(
+                hidden_size=config.hidden_size,
+                intermediate_size=config.intermediate_size,
+                num_hidden_layers=config.num_hidden_layers,
+                num_attention_heads=config.num_attention_heads,
+                num_key_value_heads=config.num_attention_heads,
+                max_position_embeddings=config.max_position_embeddings,
+                attention_dropout=config.attention_probs_dropout_prob,
+                rms_norm_eps=config.layer_norm_eps,
+            )
+            ds_config.o_lora_rank = config.hidden_size
+            self.self = attn_cls(ds_config, layer_idx=0)
+        else:
+            self.self = attn_cls(config, position_embedding_type=position_embedding_type)
         self.output = BertSelfOutput(config)
         self.pruned_heads = set()
 

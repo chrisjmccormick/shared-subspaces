@@ -16,8 +16,8 @@
 # limitations under the License.
 """DeepSeekV3 model configuration"""
 
-from ...configuration_utils import PretrainedConfig
-from ...modeling_rope_utils import rope_config_validation
+from transformers.configuration_utils import PretrainedConfig
+from transformers.modeling_rope_utils import rope_config_validation
 
 
 DEEPSEEK_PRETRAINED_CONFIG_ARCHIVE_MAP = {}

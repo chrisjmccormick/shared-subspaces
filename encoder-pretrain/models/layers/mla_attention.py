@@ -13,17 +13,17 @@ from transformers.activations import ACT2FN
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
 from transformers.utils import logging
+from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
+from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 # Local modules (copied into repo)
 from models.layers.cache_utils import Cache, DynamicCache
 from models.layers.configuration_deepseek_v3 import DeepseekV3Config
 
 # 🟡 Optional: For future support (still unused unless you reintroduce dynamic attention backend)
-# from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 # Removed:
 # from ...generation import GenerationMixin
-# from ...integrations import use_kernel_forward_from_hub
 # from ...masking_utils import create_causal_mask
 # from ...modeling_flash_attention_utils import FlashAttentionKwargs
 # from ...modeling_layers import GradientCheckpointingLayer
@@ -31,14 +31,12 @@ from models.layers.configuration_deepseek_v3 import DeepseekV3Config
 # from ...processing_utils import Unpack
 # from ...utils import LossKwargs, auto_docstring, can_return_tuple
 
-!wget -q -O local_hf/cache_utils.py https://github.com/huggingface/transformers/raw/refs/tags/v4.53.3/src/transformers/cache_utils.py
-!wget -q -O local_hf/configuration_deepseek_v3.py https://github.com/huggingface/transformers/raw/refs/tags/v4.53.3/src/transformers/models/deepseek_v3/configuration_deepseek_v3.py
-
 
 logger = logging.get_logger(__name__)
 
 
-@use_kernel_forward_from_hub("RMSNorm")
+# Optional JIT kernel; harmless to disable if unavailable
+# @use_kernel_forward_from_hub("RMSNorm")
 class DeepseekV3RMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         """
@@ -245,6 +243,10 @@ class DeepseekV3Attention(nn.Module):
         self.qk_nope_head_dim = config.qk_nope_head_dim
         self.qk_head_dim = config.qk_head_dim
 
+        # Additional attributes used by our MLA variant
+        self.hidden_size = config.hidden_size
+        self.o_lora_rank = getattr(config, "o_lora_rank", config.hidden_size)
+
         self.is_causal = True
         if self.q_lora_rank is None:
             self.q_proj = nn.Linear(config.hidden_size, self.num_heads * self.qk_head_dim, bias=False)
@@ -297,7 +299,7 @@ class DeepseekV3Attention(nn.Module):
         attention_mask: Optional[torch.Tensor],
         past_key_value: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
-        **kwargs: Unpack[FlashAttentionKwargs],
+        **kwargs,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
         batch_size, seq_length = hidden_states.shape[:-1]
         query_shape = (batch_size, seq_length, -1, self.qk_head_dim)
