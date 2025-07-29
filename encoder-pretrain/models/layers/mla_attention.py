@@ -2,27 +2,35 @@
 # https://github.com/huggingface/transformers/blob/a5923d4de7df2fbd1f373dfcfe983216b79b6937/src/transformers/models/deepseek_v3/modeling_deepseek_v3.py
 
 
-
 import math
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ...activations import ACT2FN
-from ...cache_utils import Cache, DynamicCache
-from ...generation import GenerationMixin
-from ...integrations import use_kernel_forward_from_hub
-from ...masking_utils import create_causal_mask
-from ...modeling_flash_attention_utils import FlashAttentionKwargs
-from ...modeling_layers import GradientCheckpointingLayer
-from ...modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
-from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
-from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
-from ...processing_utils import Unpack
-from ...utils import LossKwargs, auto_docstring, can_return_tuple, logging
+# ✅ Direct HF imports
+from transformers.activations import ACT2FN
+from transformers.modeling_outputs import BaseModelOutputWithPast
+from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
+from transformers.utils import logging
+
+# 🟡 Likely still needed
+from transformers.cache_utils import Cache, DynamicCache
 from .configuration_deepseek_v3 import DeepseekV3Config
+
+# ❌ You can delete these (not needed):
+# from ...generation import GenerationMixin
+# from ...integrations import use_kernel_forward_from_hub
+# from ...masking_utils import create_causal_mask
+# from ...modeling_flash_attention_utils import FlashAttentionKwargs
+# from ...modeling_layers import GradientCheckpointingLayer
+# from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+# from ...processing_utils import Unpack
+# from ...utils import LossKwargs, auto_docstring, can_return_tuple
+
+!wget -q -O local_hf/cache_utils.py https://github.com/huggingface/transformers/raw/refs/tags/v4.53.3/src/transformers/cache_utils.py
+!wget -q -O local_hf/configuration_deepseek_v3.py https://github.com/huggingface/transformers/raw/refs/tags/v4.53.3/src/transformers/models/deepseek_v3/configuration_deepseek_v3.py
 
 
 logger = logging.get_logger(__name__)
