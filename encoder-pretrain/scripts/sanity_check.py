@@ -15,7 +15,7 @@ print("Passing repo id as:", str(model_path))
 # Load the checkpoint
 model = BertForMaskedLM.from_pretrained(
     str(model_path),
-    local_files_only=True
+    local_files_only=True,
     trust_remote_code=True,  # Usually safe for local loads
     use_safetensors=True     # 
 )
