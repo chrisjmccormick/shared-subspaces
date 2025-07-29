@@ -7,9 +7,14 @@ model_path = "../checkpoints/baseline/"
 # Use the tokenizer you originally trained with
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-# ✅ FIXED: Use `from_pretrained(...)`, not just `BertForMaskedLM(...)`
-model = BertForMaskedLM.from_pretrained(model_path)
+# Load the checkpoint
+model = BertForMaskedLM.from_pretrained(
+    model_path,
+    local_files_only=True
+)
 model.eval()
+
+
 
 # Run a test input
 inputs = tokenizer("The capital of France is [MASK].", return_tensors="pt")
