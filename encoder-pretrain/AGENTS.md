@@ -1,7 +1,7 @@
 1. Overview
 -------------
 
-The purpose of this project is to explore modifications to the Transformer architecture relating to shared subspaces. 
+We are evaluating the viability of modifications to the Transformer architecture relating to shared subspaces. 
 
 The current topics to explore, in priority order:
 
@@ -10,6 +10,13 @@ The current topics to explore, in priority order:
 2. The use of MLA in tandem with decomposed FFNs, to determine whether they work better together than with standard MHA.
 
 3. The addition of a shared latent space on the word embeddings.
+
+1.1. Goals
+----------
+
+The plan is to eventually partner with a company or institution to fully evaluate these techniques and publish on them.
+
+The purspose of this current project, then, is to do smaller scale experiments aimed at demonstrating the potential (provided it's there) in order to attract outside interest. 
 
 
 # 2. Background
@@ -227,6 +234,11 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 
 - The current experiment which we are working on right now is to train a text encoder model from scratch to evaluate the performance impact of these different changes.
 
+# 3.3. Hardware
+
+- We are building the experiment as python scripts, and these are being run from within a Google Colab Notebook.
+- The Colab instance is connected to a 40GB A100.
+
 
 # 4. Repository Organization & Status
 -------------------------------------
@@ -243,7 +255,9 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 ----------------
 
 - We are working off of code straight from the huggingface transformers repository, so I want to make it very clear wherever we make changes.
+    - Not necessary, though, for files we've created from scratch, like the train and test scripts.
 - Always comment your code to explain the reason for your changes.
+
 
 
 
