@@ -31,9 +31,6 @@ from models.layers.configuration_deepseek_v3 import DeepseekV3Config
 # from ...processing_utils import Unpack
 # from ...utils import LossKwargs, auto_docstring, can_return_tuple
 
-!wget -q -O local_hf/cache_utils.py https://github.com/huggingface/transformers/raw/refs/tags/v4.53.3/src/transformers/cache_utils.py
-!wget -q -O local_hf/configuration_deepseek_v3.py https://github.com/huggingface/transformers/raw/refs/tags/v4.53.3/src/transformers/models/deepseek_v3/configuration_deepseek_v3.py
-
 
 logger = logging.get_logger(__name__)
 
@@ -265,22 +262,60 @@ class DeepseekV3Attention(nn.Module):
             bias=False,
         )
 
+        # --------------------------------------
+        # Modified - Support output latent space.
+        
+        self.add_output_latent = config.add_output_latent
+
+        if self.add_output_latent:
+            
+            # Per-head output projections
+            # (Similar to original W^O, but projects the scored value vectors
+            #  into a latent space instead of back to the model)
+            self.o_a_proj = nn.Linear(
+                self.num_heads * self.v_head_dim,
+                self.o_lora_rank, 
+                bias=False
+            )
+
+            # Regarding bias terms:
+            #   - The thought here is to mirror the behavior on the input 
+            #     latents, where only one of the two projections receives a
+            #     bias term. 
+            #     - Haven't yet experimented with this (i.e., whether to place
+            #       it on a or b or neither)
+            #
+            # Regarding Layernorm:
+            #   - In the ViT experiments, the addition of a layernorm between 
+            #     the o_a and o_b projections (i.e., applying it to the output
+            #     of o_a) hurt performance.
+            #   - I have not tried applying it to the output of o_b.
+            # 
+            #self.o_a_layernorm = DeepseekV3RMSNorm(
+            #    self.o_lora_rank, 
+            #    eps=config.rms_norm_eps
+            #)
+
+            # Shared output projection
+            # The head outputs from `o_a_proj` are first summed together (across
+            # heads) in the latent space.
+            # Then we project their combined outputs (a single vector per token)
+            # back to model space via `o_b_proj`.
+            self.o_b_proj = nn.Linear(
+                self.o_lora_rank, 
+                self.hidden_size, 
+                bias=config.attention_bias
+            )
+        
+        # --------------------------------------
         # Original output matrix
-        #self.o_proj = nn.Linear(
-        #    self.num_heads * self.v_head_dim,
-        #    config.hidden_size,
-        #    bias=config.attention_bias,
-        #)
-
-        # Per-head output projections
-        self.o_a_proj = nn.Linear(self.num_heads * self.v_head_dim, self.o_lora_rank, bias=False)
-
-        # Layernorm on all projections
-        self.o_a_layernorm = DeepseekV3RMSNorm(self.o_lora_rank, eps=config.rms_norm_eps)
-
-        # Shared output projection
-        self.o_b_proj = nn.Linear(self.o_lora_rank, self.hidden_size, bias=False)
-
+        else:
+            self.o_proj = nn.Linear(
+                self.num_heads * self.v_head_dim,
+                config.hidden_size,
+                bias=config.attention_bias,
+            )
+        # --------------------------------------
 
         self.scaling = self.qk_head_dim ** (-0.5)
         if self.config.rope_scaling is not None:
@@ -356,22 +391,34 @@ class DeepseekV3Attention(nn.Module):
 
         attn_output = attn_output.reshape(batch_size, seq_length, -1).contiguous()
 
+
+        # ------------------------------------------------------
+        # Modified version: Adding an intermediate latent space.
+        if self.add_output_latent:
+            # First, project the scored value vectors onto `o_a_proj`. This is
+            # equivalent to projecting onto W^O in standard attention, except 
+            # that here we are projecting into an intermediate latent space. 
+            # This projection is unique per-head, preserving head diversity, and
+            # then sums the results into a single vector per token.
+            attn_output = self.o_a_proj(attn_output)
+        
+            # MLA uses RMSNorm on the query and key-value latents. It's not
+            # clear yet whether this is helpful for the output.
+            #attn_output = self.o_a_layernorm(attn_output)
+
+            #print(f"attn_output after o_a_proj: {attn_output.shape}")
+
+            # The input to `o_b_proj` is the summed output latents of the 
+            # attention heads. This step re-projects this single per-token 
+            # latent back to model space.
+            attn_output = self.o_b_proj(attn_output)
+        
+        # ----------------------------------------- 
+        # Original: Standard W^O output projection.
+        else:
+            attn_output = self.o_proj(attn_output)
+
         # -----------------------------------------
-        # Original
-        
-        # attn_output = self.o_proj(attn_output)
-
-
-        # ----------------------------------------
-        # Modified - Per-head output projection
-        
-        attn_output = self.o_a_proj(attn_output)
-
-        #print(f"attn_output after o_a_proj: {attn_output.shape}")
-
-        # Shared output projection.
-        attn_output = self.o_b_proj(self.o_a_layernorm(attn_output))
-        #----------------------------------------
         
         return attn_output, attn_weights
 
