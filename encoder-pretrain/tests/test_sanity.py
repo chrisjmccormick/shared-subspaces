@@ -48,7 +48,6 @@ def test_deepseek_attention_forward():
         attention_dropout=0.0,
         rms_norm_eps=1e-6,
     )
-    ds_config.add_output_latent = False
     ds_config._attn_implementation = "eager"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
@@ -80,9 +79,9 @@ def test_deepseek_attention_with_output_latent():
         max_position_embeddings=16,
         attention_dropout=0.0,
         rms_norm_eps=1e-6,
+        use_output_latent=True,
+        o_lora_rank=32,
     )
-    ds_config.add_output_latent = True
-    ds_config.o_lora_rank = ds_config.hidden_size
     ds_config._attn_implementation = "eager"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
@@ -117,7 +116,6 @@ def test_deepseek_attention_flash():
         attention_dropout=0.0,
         rms_norm_eps=1e-6,
     )
-    ds_config.add_output_latent = False
     ds_config._attn_implementation = "flash_attention_2"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 

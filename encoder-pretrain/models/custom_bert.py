@@ -491,7 +491,6 @@ class BertAttention(nn.Module):
                 attention_dropout=config.attention_probs_dropout_prob,
                 rms_norm_eps=config.layer_norm_eps,
             )
-            ds_config.add_output_latent = config.add_output_latent
             ds_config._attn_implementation = config._attn_implementation
             self.self = attn_cls(ds_config, layer_idx=0)
             self.rotary_emb = DeepseekV3RotaryEmbedding(ds_config)
