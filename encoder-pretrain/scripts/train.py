@@ -21,7 +21,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from models.custom_bert import CustomBertForMaskedLM
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to JSON config")
