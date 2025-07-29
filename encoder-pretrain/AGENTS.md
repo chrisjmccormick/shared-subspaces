@@ -269,9 +269,11 @@ for p in attn.parameters():
 
 ```
 
+## 5.2. Sanity Check BERT implementation
+----------------------------------------
 
-
-- Run baseline experiments on MLA, without the output latent space.
-    - Compare to standard BERT.
-	- Compare with and without the use of (1-2?) dense MHA layers.
+1. Create a single BERT layer from our custom class and validate it in the same way.
+    a. Do this once with standard MHA, 
+	b. then again using MLA, taking the configuration properties from mla.json.
+        - Print out the model definition or parameter list to verify MLA is being used.
 
