@@ -16,6 +16,8 @@ print("Passing repo id as:", str(model_path))
 model = BertForMaskedLM.from_pretrained(
     str(model_path),
     local_files_only=True
+    trust_remote_code=True,  # Usually safe for local loads
+    use_safetensors=True     # 
 )
 model.eval()
 
