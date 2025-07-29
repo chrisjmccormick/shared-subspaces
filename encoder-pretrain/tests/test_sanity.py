@@ -157,7 +157,8 @@ def test_custom_bert_with_mla_output_latent():
         num_attention_heads=4,
         intermediate_size=64,
     )
-    config._attn_implementation = "mla"
+    config._attn_implementation = "eager" # Allows for manual implementation.
+    config.use_mla = True # Use this to choose MLA instead.
     config.add_output_latent = True
     model = BertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
