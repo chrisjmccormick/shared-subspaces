@@ -1,25 +1,27 @@
 # Copied from transformers 4.53.3 here:
 # https://github.com/huggingface/transformers/blob/a5923d4de7df2fbd1f373dfcfe983216b79b6937/src/transformers/models/deepseek_v3/modeling_deepseek_v3.py
 
-
 import math
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-# ✅ Direct HF imports
+# External HF modules (via transformers)
 from transformers.activations import ACT2FN
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
 from transformers.utils import logging
 
-# 🟡 Likely still needed
-from transformers.cache_utils import Cache, DynamicCache
-from .configuration_deepseek_v3 import DeepseekV3Config
+# Local modules (copied into repo)
+from models.layers.cache_utils import Cache, DynamicCache
+from models.layers.configuration_deepseek_v3 import DeepseekV3Config
 
-# ❌ You can delete these (not needed):
+# 🟡 Optional: For future support (still unused unless you reintroduce dynamic attention backend)
+# from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+
+# Removed:
 # from ...generation import GenerationMixin
 # from ...integrations import use_kernel_forward_from_hub
 # from ...masking_utils import create_causal_mask
