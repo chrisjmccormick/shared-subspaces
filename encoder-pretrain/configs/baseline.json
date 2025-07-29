@@ -23,7 +23,7 @@
   "dataset_name": "wikitext",
   "dataset_config": "wikitext-2-raw-v1",
 
-  "seed": 42
+  "seed": 42,
 
   "output_dir": "checkpoints/baseline",
   
