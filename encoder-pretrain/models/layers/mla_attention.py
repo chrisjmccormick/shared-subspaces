@@ -1,3 +1,7 @@
+# Copied from transformers 4.53.3 here:
+# https://github.com/huggingface/transformers/blob/a5923d4de7df2fbd1f373dfcfe983216b79b6937/src/transformers/models/deepseek_v3/modeling_deepseek_v3.py
+
+
 
 import math
 from typing import Callable, Optional, Union
