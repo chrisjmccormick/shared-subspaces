@@ -3,4 +3,3 @@ datasets
 accelerate
 wandb
 torch
-flash-attn --no-build-isolation
