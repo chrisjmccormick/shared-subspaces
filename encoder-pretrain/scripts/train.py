@@ -1,3 +1,5 @@
+print("Importing Packages...\n")
+
 import json
 import argparse
 from pathlib import Path
@@ -16,7 +18,6 @@ from transformers import (
 )
 
 from transformers import AutoModelForMaskedLM, AutoConfig
-
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -89,9 +90,19 @@ def main():
     if wandb_api_key:
         wandb.login(key=wandb_api_key)
 
-    # Load tokenizer and dataset
-    tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
-    dataset = load_dataset(cfg["dataset_name"], cfg["dataset_config"])
+    
+    # Use the standard BERT tokenizer.
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    cfg["vocab_size"] = tokenizer.vocab_size
+    
+    
+    dataset = load_dataset(
+        cfg["dataset_name"], 
+        cfg["dataset_config"]
+    )
+
+    
+    
 
     def tokenize_function(examples):
         return tokenizer(
@@ -117,7 +128,20 @@ def main():
     )
 
     #model = CustomBertForMaskedLM.from_config(cfg)
-    bert_config = AutoConfig.from_pretrained(cfg["model_name"])
+
+    bert_config = BertConfig(
+        vocab_size=cfg["vocab_size"],
+        hidden_size=cfg["hidden_size"],
+        num_hidden_layers=cfg["num_hidden_layers"],
+        num_attention_heads=cfg["num_attention_heads"],
+        intermediate_size=cfg["intermediate_size"],
+        max_position_embeddings=cfg.get("max_position_embeddings", 512),
+        type_vocab_size=cfg.get("type_vocab_size", 2),
+        hidden_act=cfg.get("hidden_act", "gelu"),
+        hidden_dropout_prob=cfg.get("hidden_dropout_prob", 0.1),
+        attention_probs_dropout_prob=cfg.get("attention_probs_dropout_prob", 0.1),
+    )
+    
     model = AutoModelForMaskedLM.from_config(bert_config)
     
     model
@@ -197,7 +221,7 @@ def main():
     # Format the cfg learning rate as a scientific notation string like 5e-4
     lr_str = '{:.4e}'.format(cfg['learning_rate'])
 
-    run_name = f"{cfg['total_elements']} - bert scratch - h{cfg.hidden_size} - l{cfg.num_hidden_layers} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+    run_name = f"{cfg['total_elements']} - bert scratch - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
 
     wandb.init(
         project="encoder-pretrain", 
