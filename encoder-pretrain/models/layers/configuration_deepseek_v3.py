@@ -213,6 +213,15 @@ class DeepseekV3Config(PretrainedConfig):
         self.qk_rope_head_dim = qk_rope_head_dim
         self.v_head_dim = v_head_dim
         self.qk_nope_head_dim = qk_nope_head_dim
+        # ------------------------------------------------
+        # Modified: store output latent options on the config
+        # so they don't need to be manually overridden later.
+        self.use_output_latent = use_output_latent
+        # Keep backwards compatibility with older code that
+        # checks `add_output_latent`.
+        self.add_output_latent = use_output_latent
+        self.o_lora_rank = o_lora_rank
+        # ------------------------------------------------
         self.qk_head_dim = qk_nope_head_dim + qk_rope_head_dim
         self.head_dim = qk_rope_head_dim
         self.n_group = n_group
