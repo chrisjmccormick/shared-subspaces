@@ -1,0 +1,18 @@
+{
+  "model_type": "bert",
+  "model_name": "bert-base-uncased",
+  "output_dir": "checkpoints/mla_output_decompose",
+  "max_seq_length": 128,
+  "train_batch_size": 32,
+  "eval_batch_size": 32,
+  "learning_rate": 5e-5,
+  "num_train_epochs": 1,
+  "mlm_probability": 0.15,
+  "dataset_name": "wikitext",
+  "dataset_config": "wikitext-2-raw-v1",
+  "use_mla": true,
+  "output_subspace_dim": 256,
+  "output_subspace": true,
+  "ffn_decompose": true,
+  "ffn_rank": 128
+}
