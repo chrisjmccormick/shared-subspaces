@@ -14,6 +14,5 @@
   "seed": 42,
   "use_mla": false,
   "output_subspace": false,
-  "ffn_decompose": false,
-   
+  "ffn_decompose": false
 }
