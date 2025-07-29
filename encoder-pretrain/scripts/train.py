@@ -209,15 +209,15 @@ def main():
     #     Run Training
     # =====================
 
-    try {
+    try:
         trainer.train()
         metrics = trainer.evaluate()
         wandb.log(metrics)
-    }
-    finally {
+    
+    finally:
         wandb.finish()
         trainer.save_model(cfg["output_dir"])
-    }
+    
 
 if __name__ == "__main__":
     main()
