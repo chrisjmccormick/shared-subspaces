@@ -7,6 +7,7 @@ import os
 import wandb
 from datasets import load_dataset
 import transformers
+
 from transformers import (
     AutoTokenizer,
     DataCollatorForLanguageModeling,
@@ -22,7 +23,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.custom_bert import CustomBertForMaskedLM
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -54,8 +54,10 @@ def main():
 
     model = CustomBertForMaskedLM.from_config(cfg)
 
+
     hf_version = transformers.__version__
     kwargs = dict(
+
         output_dir=cfg["output_dir"],
         per_device_train_batch_size=cfg["train_batch_size"],
         per_device_eval_batch_size=cfg["eval_batch_size"],
