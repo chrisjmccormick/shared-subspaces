@@ -100,8 +100,6 @@ def main():
         cfg["dataset_name"], 
         cfg["dataset_config"]
     )
-
-    
     
 
     def tokenize_function(examples):

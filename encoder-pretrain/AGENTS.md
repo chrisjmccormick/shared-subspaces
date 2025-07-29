@@ -239,8 +239,37 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 	    - We've added the proposed decomposition of $W^O$.
   
 
-# 5. Still To Do / Next
------------------------
+# 5. Next Steps
+---------------
+
+## 5.1. Sanity Check MLA implementation
+---------------------------------------
+
+Write a code snippet which will instantiate an MLA object, generate some random data, and then validate via:
+
+```python
+
+# x = some random data
+# attn = DeepSeekV3Attention object
+
+# 1. Forward pass
+y = attn(x)
+
+# The output shape should match the input shape.
+assert y.shape == x.shape
+
+# 2. Gradient test
+y.mean().backward()
+
+# For each parameter,
+for p in attn.parameters():
+
+    # Ensure it received a gradient.
+    assert p.grad is not None
+
+```
+
+
 
 - Run baseline experiments on MLA, without the output latent space.
     - Compare to standard BERT.

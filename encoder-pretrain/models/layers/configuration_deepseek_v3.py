@@ -169,6 +169,13 @@ class DeepseekV3Config(PretrainedConfig):
         qk_rope_head_dim=64,
         v_head_dim=128,
         qk_nope_head_dim=128,
+        
+        # ------------------------------------------------
+        # Modified: Support additional output latent space
+        use_output_latent=False,
+        o_lora_rank=1536,
+        # ------------------------------------------------
+        
         n_group=8,
         topk_group=4,
         num_experts_per_tok=8,
