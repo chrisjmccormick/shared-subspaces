@@ -1,6 +1,7 @@
 from transformers import AutoTokenizer, BertForMaskedLM
 import torch
 from pathlib import Path
+import os
 
 # Load model from your training checkpoint directory
 model_path = "../checkpoints/baseline/"
@@ -8,7 +9,11 @@ model_path = "../checkpoints/baseline/"
 # Use the tokenizer you originally trained with
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-model_path = Path("../checkpoints/baseline").resolve()
+model_path = Path("../encoder-pretrain/checkpoints/baseline").resolve()
+
+# Confirm directory exists
+assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
+
 
 print("Passing repo id as:", str(model_path))
 
