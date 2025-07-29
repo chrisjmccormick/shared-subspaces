@@ -3,8 +3,11 @@ import argparse
 from pathlib import Path
 import sys
 
+import os
 import wandb
 from datasets import load_dataset
+import transformers
+
 from transformers import (
     AutoTokenizer,
     DataCollatorForLanguageModeling,
@@ -32,6 +35,12 @@ def main():
     with open(args.config) as f:
         cfg = json.load(f)
 
+    if "WANDB_MODE" not in os.environ:
+        os.environ["WANDB_MODE"] = "offline"
+    wandb_api_key = os.environ.get("WANDB_API_KEY")
+    if wandb_api_key:
+        wandb.login(key=wandb_api_key)
+
     wandb.init(project="encoder-pretrain", config=cfg)
 
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
@@ -45,17 +54,22 @@ def main():
 
     model = CustomBertForMaskedLM.from_config(cfg)
 
-    training_args = TrainingArguments(
+
+    hf_version = transformers.__version__
+    kwargs = dict(
+
         output_dir=cfg["output_dir"],
         per_device_train_batch_size=cfg["train_batch_size"],
         per_device_eval_batch_size=cfg["eval_batch_size"],
         learning_rate=cfg["learning_rate"],
         num_train_epochs=cfg["num_train_epochs"],
         logging_steps=50,
-        evaluation_strategy="steps",
         save_steps=500,
         report_to=["wandb"],
     )
+    if tuple(map(int, hf_version.split(".")[:2])) >= (3, 1):
+        kwargs["evaluation_strategy"] = "steps"
+    training_args = TrainingArguments(**kwargs)
 
     trainer = Trainer(
         model=model,
