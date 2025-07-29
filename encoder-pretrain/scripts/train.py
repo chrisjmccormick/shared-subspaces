@@ -225,7 +225,7 @@ def main():
 
     wandb.init(
         project="encoder-pretrain", 
-        run_name=run_name,
+        name=run_name,
         config=cfg
     )
 
