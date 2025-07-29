@@ -1,13 +1,25 @@
 import json
 import argparse
+from pathlib import Path
+import sys
 
 import wandb
 from datasets import load_dataset
-from transformers import (AutoTokenizer, DataCollatorForLanguageModeling,
-                          Trainer, TrainingArguments)
+from transformers import (
+    AutoTokenizer,
+    DataCollatorForLanguageModeling,
+    Trainer,
+    TrainingArguments,
+)
 
-from encoder_pretrain.models.custom_bert import CustomBertForMaskedLM
+# Make sure we can import modules from the encoder-pretrain package even if the
+# directory name contains a hyphen. When running this script directly the
+# parent directory of this file is ``encoder-pretrain``.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
+from models.custom_bert import CustomBertForMaskedLM
 
 def parse_args():
     parser = argparse.ArgumentParser()
