@@ -1,5 +1,6 @@
 from transformers import AutoTokenizer, BertForMaskedLM
 import torch
+from pathlib import Path
 
 # Load model from your training checkpoint directory
 model_path = "../checkpoints/baseline/"
@@ -7,13 +8,16 @@ model_path = "../checkpoints/baseline/"
 # Use the tokenizer you originally trained with
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
+model_path = Path("../checkpoints/baseline").resolve()
+
+print("Passing repo id as:", str(model_path))
+
 # Load the checkpoint
 model = BertForMaskedLM.from_pretrained(
-    model_path,
+    str(model_path),
     local_files_only=True
 )
 model.eval()
-
 
 
 # Run a test input
