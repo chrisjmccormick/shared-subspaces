@@ -11,7 +11,9 @@
   "mlm_probability": 0.15,
   "dataset_name": "wikitext",
   "dataset_config": "wikitext-2-raw-v1",
+  "seed": 42,
   "use_mla": false,
   "output_subspace": false,
-  "ffn_decompose": false
+  "ffn_decompose": false,
+   
 }
