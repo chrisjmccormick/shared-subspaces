@@ -1,0 +1,40 @@
+Tracking run with wandb version 0.21.0
+Run data is saved locally in /content/shared-subspaces/encoder-pretrain/wandb/run-20250729_175426-00pkhnxn
+Syncing run finetune-cola to Weights & Biases (docs)
+View project at https://wandb.ai/chrismccormick/encoder-pretrain
+View run at https://wandb.ai/chrismccormick/encoder-pretrain/runs/00pkhnxn
+train-00000-of-00001.parquet: 100%
+ 3.11M/3.11M [00:00<00:00, 67.9MB/s]
+validation-00000-of-00001.parquet: 100%
+ 72.8k/72.8k [00:00<00:00, 8.64MB/s]
+test-00000-of-00001.parquet: 100%
+ 148k/148k [00:00<00:00, 15.6MB/s]
+Generating train split: 100%
+ 67349/67349 [00:00<00:00, 1383014.92 examples/s]
+Generating validation split: 100%
+ 872/872 [00:00<00:00, 63730.56 examples/s]
+Generating test split: 100%
+ 1821/1821 [00:00<00:00, 108759.13 examples/s]
+Map: 100%
+ 67349/67349 [00:06<00:00, 10779.20 examples/s]
+Map: 100%
+ 872/872 [00:00<00:00, 9200.28 examples/s]
+Map: 100%
+ 1821/1821 [00:00<00:00, 9873.06 examples/s]
+Some weights of BertForSequenceClassification were not initialized from the model checkpoint at /content/shared-subspaces/encoder-pretrain/checkpoints/baseline/ and are newly initialized: ['bert.pooler.dense.bias', 'bert.pooler.dense.weight', 'classifier.bias', 'classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Epoch 1:   0%|          | 0/3789 [00:00<?, ?it/s]/usr/local/lib/python3.11/dist-packages/torch/nn/modules/module.py:1750: FutureWarning: `encoder_attention_mask` is deprecated and will be removed in version 4.55.0 for `BertSdpaSelfAttention.forward`.
+  return forward_call(*args, **kwargs)
+Epoch 1: 100%|██████████| 3789/3789 [01:17<00:00, 48.60it/s]
+[Epoch 1] Train Loss: 0.4682 | Val Acc: 0.8625 | MCC: 0.7202
+Epoch 2:   0%|          | 0/3789 [00:00<?, ?it/s]/usr/local/lib/python3.11/dist-packages/torch/nn/modules/module.py:1750: FutureWarning: `encoder_attention_mask` is deprecated and will be removed in version 4.55.0 for `BertSdpaSelfAttention.forward`.
+  return forward_call(*args, **kwargs)
+Epoch 2: 100%|██████████| 3789/3789 [01:16<00:00, 49.76it/s]
+[Epoch 2] Train Loss: 0.2847 | Val Acc: 0.8928 | MCC: 0.7840
+Epoch 3:   0%|          | 0/3789 [00:00<?, ?it/s]/usr/local/lib/python3.11/dist-packages/torch/nn/modules/module.py:1750: FutureWarning: `encoder_attention_mask` is deprecated and will be removed in version 4.55.0 for `BertSdpaSelfAttention.forward`.
+  return forward_call(*args, **kwargs)
+Epoch 3: 100%|██████████| 3789/3789 [01:16<00:00, 49.69it/s]
+[Epoch 3] Train Loss: 0.2400 | Val Acc: 0.8971 | MCC: 0.7922
+/usr/local/lib/python3.11/dist-packages/torch/nn/modules/module.py:1750: FutureWarning: `encoder_attention_mask` is deprecated and will be removed in version 4.55.0 for `BertSdpaSelfAttention.forward`.
+  return forward_call(*args, **kwargs)
+[FINAL] Test Accuracy: 0.7959 | Test MCC: 0.5916
