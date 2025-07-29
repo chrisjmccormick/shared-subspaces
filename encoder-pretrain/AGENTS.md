@@ -239,9 +239,11 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 	    - We've added the proposed decomposition of $W^O$.
   
 
-# 5. Next Steps
----------------
+# 5. Conventions
+----------------
 
-## 5.1. Sanity Check MLA implementation
----------------------------------------
+- We are working off of code straight from the huggingface transformers repository, so I want to make it very clear wherever we make changes.
+- Always comment your code to explain the reason for your changes.
+
+
 
