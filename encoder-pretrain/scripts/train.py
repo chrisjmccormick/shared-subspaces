@@ -17,7 +17,7 @@ from transformers import (
     set_seed,
 )
 
-from transformers import AutoModelForMaskedLM, AutoConfig
+from transformers import AutoModelForMaskedLM, AutoConfig, BertConfig
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
