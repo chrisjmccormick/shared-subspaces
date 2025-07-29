@@ -51,8 +51,11 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import apply_chunking_to_forward, find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import ModelOutput, auto_docstring, get_torch_version, logging
 from .configuration_bert import BertConfig
-from .layers.mla_attention import DeepseekV3Attention
+# -------------------------------------------------------------
+# Modified: Import DeepSeek MLA components used in our custom mode.
+from .layers.mla_attention import DeepseekV3Attention, DeepseekV3RotaryEmbedding
 from .layers.configuration_deepseek_v3 import DeepseekV3Config
+# -------------------------------------------------------------
 
 
 
@@ -448,7 +451,10 @@ class BertSelfOutput(nn.Module):
 BERT_SELF_ATTENTION_CLASSES = {
     "eager": BertSelfAttention,
     "sdpa": BertSdpaSelfAttention,
+    # -------------------------------------------------
+    # Modified: Keep "mla" as an alias for older configs.
     "mla": DeepseekV3Attention,
+    # -------------------------------------------------
 }
 
 
@@ -456,9 +462,14 @@ class BertAttention(nn.Module):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
         attn_cls = BERT_SELF_ATTENTION_CLASSES[config._attn_implementation]
-        
         # -------------------------------------------------
-        # Modified: Support MLA.
+        # Modified: Switch to MLA when requested via config.use_mla.
+        if config.use_mla:
+            attn_cls = DeepseekV3Attention
+        # -------------------------------------------------
+
+        # -------------------------------------------------
+        # Modified: Support MLA when requested.
         if attn_cls is DeepseekV3Attention:
             ds_config = DeepseekV3Config(
                 hidden_size=config.hidden_size,
@@ -466,25 +477,24 @@ class BertAttention(nn.Module):
                 num_hidden_layers=config.num_hidden_layers,
                 num_attention_heads=config.num_attention_heads,
                 num_key_value_heads=config.num_attention_heads,
-                
+
                 kv_lora_rank=config.kv_lora_rank,
                 q_lora_rank=config.q_lora_rank,
                 qk_rope_head_dim=config.qk_rope_head_dim,
                 v_head_dim=config.v_head_dim,
                 qk_nope_head_dim=config.qk_nope_head_dim,
-                
-                # ------------------------------------------------
-                # Modified: Support additional output latent space
-                use_output_latent=False,
-                o_lora_rank=1536,
-                # ------------------------------------------------
+
+                use_output_latent=config.add_output_latent,
+                o_lora_rank=config.o_lora_rank,
 
                 max_position_embeddings=config.max_position_embeddings,
                 attention_dropout=config.attention_probs_dropout_prob,
                 rms_norm_eps=config.layer_norm_eps,
             )
-            ds_config.o_lora_rank = config.hidden_size
+            ds_config.add_output_latent = config.add_output_latent
+            ds_config._attn_implementation = config._attn_implementation
             self.self = attn_cls(ds_config, layer_idx=0)
+            self.rotary_emb = DeepseekV3RotaryEmbedding(ds_config)
         # ---------------------------------------------------
         else:
             self.self = attn_cls(config, position_embedding_type=position_embedding_type)
@@ -520,15 +530,30 @@ class BertAttention(nn.Module):
         past_key_value: Optional[tuple[tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
     ) -> tuple[torch.Tensor]:
-        self_outputs = self.self(
-            hidden_states,
-            attention_mask,
-            head_mask,
-            encoder_hidden_states,
-            encoder_attention_mask,
-            past_key_value,
-            output_attentions,
-        )
+        if isinstance(self.self, DeepseekV3Attention):
+            # -------------------------------------------------
+            # Modified: MLA expects rotary embeddings as a tuple.
+            seq_len = hidden_states.size(1)
+            position_ids = torch.arange(seq_len, device=hidden_states.device).unsqueeze(0)
+            dummy = torch.zeros(1, 1, self.self.qk_rope_head_dim, device=hidden_states.device)
+            cos, sin = self.rotary_emb(dummy, position_ids)
+            self_outputs = self.self(
+                hidden_states,
+                (cos, sin),
+                attention_mask,
+                past_key_value,
+            )
+            # -------------------------------------------------
+        else:
+            self_outputs = self.self(
+                hidden_states,
+                attention_mask,
+                head_mask,
+                encoder_hidden_states,
+                encoder_attention_mask,
+                past_key_value,
+                output_attentions,
+            )
         attention_output = self.output(self_outputs[0], hidden_states)
         outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
         return outputs

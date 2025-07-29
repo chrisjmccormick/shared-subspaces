@@ -114,6 +114,17 @@ class BertConfig(PretrainedConfig):
         position_embedding_type="absolute",
         use_cache=True,
         classifier_dropout=None,
+        # ------------------------------------------------
+        # Modified: Extra params to support Multihead Latent Attention (MLA).
+        use_mla=False,
+        kv_lora_rank=None,
+        q_lora_rank=None,
+        qk_rope_head_dim=None,
+        v_head_dim=None,
+        qk_nope_head_dim=0,
+        add_output_latent=False,
+        o_lora_rank=None,
+        # ------------------------------------------------
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -133,6 +144,20 @@ class BertConfig(PretrainedConfig):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
+
+        # ------------------------------------------------
+        # Modified: Initialize MLA-related attributes.
+        self.use_mla = use_mla
+        self.kv_lora_rank = kv_lora_rank if kv_lora_rank is not None else hidden_size
+        self.q_lora_rank = q_lora_rank if q_lora_rank is not None else hidden_size
+        self.qk_rope_head_dim = (
+            qk_rope_head_dim if qk_rope_head_dim is not None else hidden_size // num_attention_heads
+        )
+        self.v_head_dim = v_head_dim if v_head_dim is not None else hidden_size // num_attention_heads
+        self.qk_nope_head_dim = qk_nope_head_dim
+        self.add_output_latent = add_output_latent
+        self.o_lora_rank = o_lora_rank if o_lora_rank is not None else hidden_size
+        # ------------------------------------------------
 
 
 class BertOnnxConfig(OnnxConfig):
