@@ -26,12 +26,11 @@ from transformers.utils import logging
 logger = logging.get_logger(__name__)
 
 
-class BertConfig(PretrainedConfig):
+class SubspaceBertConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`BertModel`] or a [`TFBertModel`]. It is used to
-    instantiate a BERT model according to the specified arguments, defining the model architecture. Instantiating a
-    configuration with the defaults will yield a similar configuration to that of the BERT
-    [google-bert/bert-base-uncased](https://huggingface.co/google-bert/bert-base-uncased) architecture.
+    Configuration class for the `SubspaceBertModel`.  This is copied from
+    HuggingFace's `BertConfig` and extended with additional options used in this
+    project (e.g. Multihead Latent Attention).
 
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
@@ -160,7 +159,7 @@ class BertConfig(PretrainedConfig):
         # ------------------------------------------------
 
 
-class BertOnnxConfig(OnnxConfig):
+class SubspaceBertOnnxConfig(OnnxConfig):
     @property
     def inputs(self) -> Mapping[str, Mapping[int, str]]:
         if self.task == "multiple-choice":
@@ -176,4 +175,11 @@ class BertOnnxConfig(OnnxConfig):
         )
 
 
-__all__ = ["BertConfig", "BertOnnxConfig"]
+__all__ = ["SubspaceBertConfig", "SubspaceBertOnnxConfig"]
+
+# ---------------------------------------------------------------------------
+# Aliases for backward compatibility with earlier code referencing `BertConfig`
+# and `BertOnnxConfig` directly.  This keeps old imports working while we
+# transition to the new `SubspaceBert*` names.
+BertConfig = SubspaceBertConfig
+BertOnnxConfig = SubspaceBertOnnxConfig

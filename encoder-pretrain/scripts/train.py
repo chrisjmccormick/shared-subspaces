@@ -17,7 +17,7 @@ from transformers import (
     set_seed,
 )
 
-from transformers import AutoModelForMaskedLM, AutoConfig, BertConfig
+from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +76,11 @@ def main():
     with open(args.config) as f:
         cfg = json.load(f)
 
+    # Some keys in the configs have older names. Normalize them here so the rest
+    # of the script can rely on a consistent set of fields.
+    if "use_decomp_mlp" not in cfg:
+        cfg["use_decomp_mlp"] = cfg.get("ffn_decompose", False)
+
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
     # Set random seed for reproducibility
@@ -127,7 +132,7 @@ def main():
 
     #model = CustomBertForMaskedLM.from_config(cfg)
 
-    bert_config = BertConfig(
+    bert_config = SubspaceBertConfig(
         vocab_size=cfg["vocab_size"],
         hidden_size=cfg["hidden_size"],
         num_hidden_layers=cfg["num_hidden_layers"],
@@ -138,9 +143,17 @@ def main():
         hidden_act=cfg.get("hidden_act", "gelu"),
         hidden_dropout_prob=cfg.get("hidden_dropout_prob", 0.1),
         attention_probs_dropout_prob=cfg.get("attention_probs_dropout_prob", 0.1),
+        use_mla=cfg.get("use_mla", False),
+        kv_lora_rank=cfg.get("kv_lora_rank"),
+        q_lora_rank=cfg.get("q_lora_rank"),
+        o_lora_rank=cfg.get("o_lora_rank"),
+        qk_rope_head_dim=cfg.get("qk_rope_head_dim"),
+        v_head_dim=cfg.get("v_head_dim"),
+        qk_nope_head_dim=cfg.get("qk_nope_head_dim"),
+        add_output_latent=cfg.get("use_output_latent", False),
     )
-    
-    model = AutoModelForMaskedLM.from_config(bert_config)
+
+    model = SubspaceBertForMaskedLM(bert_config)
     
     model
 
@@ -188,23 +201,42 @@ def main():
     lr_str = '{:.0e}'.format(cfg['learning_rate'])
 
     # Attention configuration
-    if cfg.use_mla:
-        dense_str = str(cfg.num_dense_layers) + "mha + "
+    if cfg.get("use_mla"):
+        dense_str = str(cfg.get("num_dense_layers")) + "mha + "
 
         # If no output subspace is used, the dimension will show as -1.
-        attn_str = dense_str + "mla." + str(cfg.q_lora_rank) + "." + str(cfg.kv_lora_rank) + "." + str(cfg.o_lora_rank)
+        attn_str = (
+            dense_str
+            + "mla."
+            + str(cfg.get("q_lora_rank"))
+            + "."
+            + str(cfg.get("kv_lora_rank"))
+            + "."
+            + str(cfg.get("o_lora_rank"))
+        )
     else:
         attn_str = "mha"
 
     # MLP Configuration
-    if cfg.use_decomp_mlp:
+    if cfg.get("use_decomp_mlp"):
         # Specify the number of dense mlps and their size.
-        dense_str = str(cfg.num_dense_layers) + "mlp." + str(cfg.intermediate_size) + " + "
+        dense_str = (
+            str(cfg.get("num_dense_layers"))
+            + "mlp."
+            + str(cfg.get("intermediate_size"))
+            + " + "
+        )
 
         # Specify the neuron count and latent dimension of the decomposed mlps.
-        mlp_str = dense_str + "dcmp." + str(cfg.mlp_num_neurons) + "." + str(cfg.mlp_latent_dim)
+        mlp_str = (
+            dense_str
+            + "dcmp."
+            + str(cfg.get("mlp_num_neurons"))
+            + "."
+            + str(cfg.get("mlp_latent_dim"))
+        )
     else:
-        mlp_str = "mlp." + str(cfg.mlp_num_neurons)
+        mlp_str = "mlp." + str(cfg.get("mlp_num_neurons"))
 
 
     run_name = f"{cfg['total_elements']} - {attn_str} - {mlp_str} - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
