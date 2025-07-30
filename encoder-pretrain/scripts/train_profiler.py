@@ -280,7 +280,7 @@ def main():
         # Profile the training run to collect performance information.
         # The context records all operations executed by `trainer.train`.
         with torch_profiler.profile(
-            activities=[torch_profiler.ProfilerActivity.CPU, torch_profiler.ProfilerActivity.GPU],
+            activities=[torch_profiler.ProfilerActivity.CPU, torch_profiler.ProfilerActivity.CUDA],
             record_shapes=True,
         ) as prof:
             trainer.train()
