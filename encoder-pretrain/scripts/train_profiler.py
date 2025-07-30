@@ -41,15 +41,23 @@ def parse_args():
 
 from torch.utils.data import DataLoader
 
+
 class CustomTrainer(Trainer):
+    """Trainer with configurable dataloaders and cheaper logging."""
+
+    def __init__(self, *args, config=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config or {}
+
     def get_train_dataloader(self):
+        """Return DataLoader using values from the config."""
         return DataLoader(
             self.train_dataset,
             batch_size=self.args.train_batch_size,
             shuffle=True,
             collate_fn=self.data_collator,
-            num_workers=4,
-            pin_memory=True,
+            num_workers=self.config.get("pre_train", {}).get("num_workers", 4),
+            pin_memory=self.config.get("pre_train", {}).get("pin_memory", True),
         )
 
     def get_eval_dataloader(self, eval_dataset=None):
@@ -58,9 +66,22 @@ class CustomTrainer(Trainer):
             eval_dataset,
             batch_size=self.args.eval_batch_size,
             collate_fn=self.data_collator,
-            num_workers=4,
-            pin_memory=True,
+            num_workers=self.config.get("pre_train", {}).get("num_workers", 4),
+            pin_memory=self.config.get("pre_train", {}).get("pin_memory", True),
         )
+
+    def training_step(self, model, inputs):
+        """Detach loss and only convert to scalar on logging steps."""
+        loss = super().training_step(model, inputs)
+
+        if (
+            self.args.logging_steps > 0
+            and (self.state.global_step + 1) % self.args.logging_steps == 0
+        ):
+            # Accessing the scalar triggers a sync, so do it sparingly
+            self.loss_scalar = loss.detach().item()
+
+        return loss
 
 
 def main():
@@ -297,6 +318,8 @@ def main():
     """
 
     
+    # Use CustomTrainer to avoid per-step loss.item() calls which force
+    # cudaStreamSynchronize and to use dataloader settings from the config.
     trainer = CustomTrainer(
         model=model,
         args=training_args,
@@ -304,7 +327,7 @@ def main():
         eval_dataset=tokenized["validation"],
         processing_class=tokenizer, # New argument name, allows for other modalities.
         data_collator=data_collator,
-        #config=config,
+        config=config,
     )
 
     # =====================
