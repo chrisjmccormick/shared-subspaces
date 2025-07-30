@@ -79,7 +79,7 @@ def main():
         config["stats"] = {}
 
     # Default max_steps for profiling; keeps runs short unless overridden
-    config["pre_train"]["max_steps"] = config["pre_train"].get("max_steps", 10)
+    config["pre_train"]["max_steps"] = config["pre_train"].get("max_steps", 50)
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
@@ -269,7 +269,7 @@ def main():
         eval_strategy="steps", 
         eval_steps=config["pre_train"].get("eval_steps", 500),  # Default to 500
         
-        logging_steps=50,
+        logging_steps=100,
         
         # Checkpoint saving
         save_steps=500,
@@ -283,6 +283,7 @@ def main():
     # ===============================
     #           Trainer
     # ===============================
+    """
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -294,7 +295,16 @@ def main():
         
         data_collator=data_collator,
     )
-
+    """
+    trainer = CustomTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized["train"],
+        eval_dataset=tokenized["validation"],
+        processing_class=tokenizer, # New argument name, allows for other modalities.
+        data_collator=data_collator,
+    )
+)
     # =====================
     #     Run Training
     # =====================
