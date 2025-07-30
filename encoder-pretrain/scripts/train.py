@@ -178,16 +178,16 @@ def main():
     # ========================================
     #   Format Settings for WandB Run Name
     # ========================================
-    
+
     # Format the cfg learning rate as a scientific notation string like 5e-4
     lr_str = '{:.0e}'.format(config['pre_train']['learning_rate'])
 
     # Attention configuration
-    if bert_config.get("use_mla"):
-        dense_str = str(bert_config.get("num_dense_layers")) + "mha + "
+    if bert_config.use_mla:
+        dense_str = str(bert_config.num_dense_layers) + "mha + "
 
-        if bert_config.get("output_subspace"):
-            o_str = "." + str(bert_config.get("o_lora_rank"))
+        if bert_config.output_subspace:
+            o_str = "." + str(bert_config.o_lora_rank)
         else:
             o_str = ""
 
@@ -195,37 +195,40 @@ def main():
         attn_str = (
             dense_str
             + "mla."
-            + str(bert_config.get("q_lora_rank"))
+            + str(bert_config.q_lora_rank)
             + "."
-            + str(bert_config.get("kv_lora_rank"))
+            + str(bert_config.kv_lora_rank)
             + o_str
         )
     else:
         attn_str = "mha"
 
     # MLP Configuration
-    if bert_config.get("ffn_decompose"):
-        # Specify the number of dense mlps and their size.
+    if bert_config.ffn_decompose:
         dense_str = (
-            str(bert_config.get("num_dense_layers"))
+            str(bert_config.num_dense_layers)
             + "mlp."
-            + str(bert_config.get("intermediate_size"))
+            + str(bert_config.intermediate_size)
             + " + "
         )
 
-        # Specify the neuron count and latent dimension of the decomposed mlps.
         mlp_str = (
             dense_str
             + "dcmp."
-            + str(bert_config.get("intermediate_size"))
+            + str(bert_config.intermediate_size)
             + "."
-            + str(bert_config.get("ffn_rank"))
-    )
+            + str(bert_config.ffn_rank)
+        )
     else:
-        mlp_str = "mlp." + str(bert_config.get("intermediate_size"))
+        mlp_str = "mlp." + str(bert_config.intermediate_size)
 
-
-    run_name = f"{config['stats']['total_elements']} - {attn_str} - {mlp_str} - h{bert_config['hidden_size']} - l{bert_config['num_hidden_layers']} - bs{config['pre_train']['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+    # Final run name
+    run_name = (
+        f"{config['stats']['total_elements']} - {attn_str} - {mlp_str} - "
+        f"h{bert_config.hidden_size} - l{bert_config.num_hidden_layers} - "
+        f"bs{config['pre_train']['train_batch_size']} - lr{lr_str} - "
+        f"seq{config['pre_train']['max_seq_length']}"
+    )
 
     config['pre_train']["run_name"] = run_name
     
