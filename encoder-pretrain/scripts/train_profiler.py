@@ -43,21 +43,25 @@ def parse_args():
 
 def main():
     args = parse_args()
-    
-    with open(args.config) as f:
-        cfg = json.load(f)
 
-    # Some keys in the configs have older names. Normalize them here so the rest
-    # of the script can rely on a consistent set of fields.
-    cfg["ffn_decompose"] = cfg.get("ffn_decompose", cfg.get("use_decomp_mlp", False))
-    cfg["output_subspace"] = cfg.get("output_subspace", cfg.get("use_output_latent", False))
+    with open(args.config) as f:
+        config = json.load(f)
+
+    # Configs are now divided into "model" and "pre_train" sections. Fail fast if
+    # these aren't present so that outdated configs cause a clear error.
+    assert "model" in config and "pre_train" in config, "Config missing required sections"
+
+    # Initialize the optional stats dictionary so later assignments don't fail.
+    if "stats" not in config:
+        config["stats"] = {}
+
     # Default max_steps for profiling; keeps runs short unless overridden
-    cfg["max_steps"] = cfg.get("max_steps", 10)
+    config["pre_train"]["max_steps"] = config["pre_train"].get("max_steps", 10)
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
     # Set random seed for reproducibility
-    set_seed(cfg.get("seed", 42))
+    set_seed(config["pre_train"].get("seed", 42))
 
     # Setup Weights & Biases
     # Use offline mode if the API key isn't in the environment variables.
@@ -71,12 +75,12 @@ def main():
     
     # Use the standard BERT tokenizer.
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    cfg["vocab_size"] = tokenizer.vocab_size
+    config["model"]["vocab_size"] = tokenizer.vocab_size
     
     
     dataset = load_dataset(
-        cfg["dataset_name"], 
-        cfg["dataset_config"]
+        config["pre_train"]["dataset_name"],
+        config["pre_train"]["dataset_config"]
     )
     
 
@@ -84,7 +88,7 @@ def main():
         return tokenizer(
             examples["text"], 
             truncation=True, 
-            max_length=cfg["max_seq_length"]
+            max_length=config["pre_train"]["max_seq_length"]
         )
 
     tokenized = dataset.map(
@@ -100,32 +104,13 @@ def main():
     # - Returns input_ids, labels, and attention_mask for MLM training
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mlm_probability=cfg["mlm_probability"] # Default is 15%
+        mlm_probability=config["pre_train"]["mlm_probability"]  # Default is 15%
     )
 
-    #model = CustomBertForMaskedLM.from_config(cfg)
+    #model = CustomBertForMaskedLM.from_config(config)
 
     bert_config = SubspaceBertConfig(
-        vocab_size=cfg["vocab_size"],
-        hidden_size=cfg["hidden_size"],
-        num_hidden_layers=cfg["num_hidden_layers"],
-        num_attention_heads=cfg["num_attention_heads"],
-        intermediate_size=cfg["intermediate_size"],
-        max_position_embeddings=cfg.get("max_position_embeddings", 512),
-        type_vocab_size=cfg.get("type_vocab_size", 2),
-        hidden_act=cfg.get("hidden_act", "gelu"),
-        hidden_dropout_prob=cfg.get("hidden_dropout_prob", 0.1),
-        attention_dropout_prob=cfg.get("attention_dropout_prob", 0.1),
-        use_mla=cfg.get("use_mla", False),
-        kv_lora_rank=cfg.get("kv_lora_rank"),
-        q_lora_rank=cfg.get("q_lora_rank"),
-        o_lora_rank=cfg.get("o_lora_rank"),
-        qk_rope_head_dim=cfg.get("qk_rope_head_dim"),
-        v_head_dim=cfg.get("v_head_dim"),
-        qk_nope_head_dim=cfg.get("qk_nope_head_dim"),
-        output_subspace=cfg.get("output_subspace", False),
-        num_dense_layers=cfg.get("num_dense_layers"),
-        ffn_rank=cfg.get("ffn_rank")
+        **config["model"]
     )
 
     model = SubspaceBertForMaskedLM(bert_config)
@@ -134,7 +119,7 @@ def main():
 
 
     print("\n======== Config File ========")
-    print(json.dumps(cfg, indent=2))
+    print(json.dumps(config, indent=2))
     print("=============================\n")
   
     """# Review
@@ -157,12 +142,12 @@ def main():
     for p_name, p in params:
         total_params += p.numel()
 
-    cfg["total_elements"] = format_size(total_params)
+    config["stats"]["total_elements"] = format_size(total_params)
 
-    print(f"Total elements: {cfg['total_elements']}\n")
+    print(f"Total elements: {config['stats']['total_elements']}\n")
 
     # Print out final config for quick verification
-    for k, v in cfg.items():
+    for k, v in config["model"].items():
         print(f"{k:>25}: {v:>10}")
 
     print("=============================\n")
@@ -175,33 +160,33 @@ def main():
     #   Format Settings for WandB Run Name
     # ========================================
     
-    # Format the cfg learning rate as a scientific notation string like 5e-4
-    lr_str = '{:.0e}'.format(cfg['learning_rate'])
+    # Format the learning rate as a scientific notation string like 5e-4
+    lr_str = '{:.0e}'.format(config['pre_train']['learning_rate'])
 
     # Attention configuration
-    if cfg.get("use_mla"):
-        dense_str = str(cfg.get("num_dense_layers")) + "mha + "
+    if config['model'].get("use_mla"):
+        dense_str = str(config['model'].get("num_dense_layers")) + "mha + "
 
         # If no output subspace is used, the dimension will show as -1.
         attn_str = (
             dense_str
             + "mla."
-            + str(cfg.get("q_lora_rank"))
+            + str(config['model'].get("q_lora_rank"))
             + "."
-            + str(cfg.get("kv_lora_rank"))
+            + str(config['model'].get("kv_lora_rank"))
             + "."
-            + str(cfg.get("o_lora_rank"))
+            + str(config['model'].get("o_lora_rank"))
         )
     else:
         attn_str = "mha"
 
     # MLP Configuration
-    if cfg.get("ffn_decompose"):
+    if config['model'].get("ffn_decompose"):
         # Specify the number of dense mlps and their size.
         dense_str = (
-            str(cfg.get("num_dense_layers"))
+            str(config['model'].get("num_dense_layers"))
             + "mlp."
-            + str(cfg.get("intermediate_size"))
+            + str(config['model'].get("intermediate_size"))
             + " + "
         )
 
@@ -209,17 +194,22 @@ def main():
         mlp_str = (
             dense_str
             + "dcmp."
-            + str(cfg.get("intermediate_size"))
+            + str(config['model'].get("intermediate_size"))
             + "."
-            + str(cfg.get("ffn_rank"))
+            + str(config['model'].get("ffn_rank"))
     )
     else:
-        mlp_str = "mlp." + str(cfg.get("intermediate_size"))
+        mlp_str = "mlp." + str(config['model'].get("intermediate_size"))
 
 
-    run_name = f"{cfg['total_elements']} - {attn_str} - {mlp_str} - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+    run_name = (
+        f"{config['stats']['total_elements']} - {attn_str} - {mlp_str} - "
+        f"h{config['model']['hidden_size']} - l{config['model']['num_hidden_layers']} - "
+        f"bs{config['pre_train']['train_batch_size']} - lr{lr_str} - "
+        f"seq{config['pre_train']['max_seq_length']}"
+    )
 
-    cfg["run_name"] = run_name
+    config['pre_train']["run_name"] = run_name
     model.config.run_name = run_name
 
     print(run_name)
@@ -229,9 +219,9 @@ def main():
 
 
     wandb.init(
-        project="encoder-pretrain", 
+        project="encoder-pretrain",
         name=run_name,
-        config=cfg
+        config=config
     )
 
     # ===============================
@@ -239,22 +229,22 @@ def main():
     # ===============================
 
     training_args = TrainingArguments(
-        output_dir=cfg["output_dir"],
-        
-        per_device_train_batch_size=cfg["train_batch_size"],
-        per_device_eval_batch_size=cfg["eval_batch_size"],
-        
-        fp16=cfg.get("fp16", False),
-        
-        learning_rate=cfg["learning_rate"],
-        num_train_epochs=cfg["num_train_epochs"],
+        output_dir=config["pre_train"]["output_dir"],
+
+        per_device_train_batch_size=config["pre_train"]["train_batch_size"],
+        per_device_eval_batch_size=config["pre_train"]["eval_batch_size"],
+
+        fp16=config["pre_train"].get("fp16", False),
+
+        learning_rate=config["pre_train"]["learning_rate"],
+        num_train_epochs=config["pre_train"]["num_train_epochs"],
         # Limit steps for profiling so execution finishes quickly
-        max_steps=cfg.get("max_steps", 10),
+        max_steps=config["pre_train"].get("max_steps", 10),
         
         # Evaluate every xx steps
         # Recent versions changed from 'evaluation_strategy'
         eval_strategy="steps", 
-        eval_steps=cfg.get("eval_steps", 500), # Default to 500
+        eval_steps=config["pre_train"].get("eval_steps", 500),  # Default to 500
         
         logging_steps=50,
         
@@ -304,7 +294,7 @@ def main():
     
     finally:
         wandb.finish()
-        trainer.save_model(cfg["output_dir"])
+        trainer.save_model(config["pre_train"]["output_dir"])
     
 
 if __name__ == "__main__":
