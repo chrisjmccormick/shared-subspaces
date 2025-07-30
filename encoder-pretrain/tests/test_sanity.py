@@ -140,7 +140,7 @@ def test_custom_bert_with_mla():
     )
     config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
-    config.add_output_latent = False
+    config.output_subspace = False
     model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
@@ -157,7 +157,7 @@ def test_custom_bert_with_mla_output_latent():
     )
     config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
-    config.add_output_latent = True
+    config.output_subspace = True
     model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)

@@ -183,7 +183,7 @@ attn_output = attn_output.reshape(batch_size, seq_length, -1).contiguous()
 # ------------------------------------------------------
 # Modified version: Adding an intermediate latent space.
 
-if self.add_output_latent:
+if self.output_subspace:
 	# First, project the scored value vectors onto `o_a_proj`. This is
 	# equivalent to projecting onto W^O in standard attention, except 
 	# that here we are projecting into an intermediate latent space. 

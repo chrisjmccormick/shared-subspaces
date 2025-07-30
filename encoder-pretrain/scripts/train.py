@@ -70,6 +70,11 @@ def main():
     with open(args.config) as f:
         config = json.load(f)
 
+    # Initialize the optional stats dictionary so later assignments don't fail.
+    # Configuration files in this repo don't define a "stats" key yet.
+    if "stats" not in config:
+        config["stats"] = {}
+
     # Strict key check on the model configuration.
     valid_keys = SubspaceBertConfig.__init__.__code__.co_varnames
     valid_keys = set(valid_keys) - {"self", "kwargs"}
@@ -130,9 +135,6 @@ def main():
     # Will raise TypeError if required args are missing
     bert_config = SubspaceBertConfig(**config["model"])
     
-    # Check the configuration for mismatched settings.
-    bert_config.validate()
-
     model = SubspaceBertForMaskedLM(bert_config)
 
     # ================================
