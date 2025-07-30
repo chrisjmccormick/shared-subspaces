@@ -124,6 +124,10 @@ class SubspaceBertConfig(PretrainedConfig):
         add_output_latent=False,
         o_lora_rank=None,
         # ------------------------------------------------
+        # Modified: Number of initial layers that use dense
+        # attention instead of MLA.
+        num_dense_layers=0,
+        # ------------------------------------------------
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -156,6 +160,9 @@ class SubspaceBertConfig(PretrainedConfig):
         self.qk_nope_head_dim = qk_nope_head_dim
         self.add_output_latent = add_output_latent
         self.o_lora_rank = o_lora_rank if o_lora_rank is not None else hidden_size
+        # When using MLA, the first `num_dense_layers` will still use
+        # standard MHA. This mirrors practices from some MoE models.
+        self.num_dense_layers = num_dense_layers
         # ------------------------------------------------
 
 
