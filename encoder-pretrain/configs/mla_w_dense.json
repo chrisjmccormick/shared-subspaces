@@ -41,7 +41,7 @@
 
   "seed": 42,
 
-  "output_dir": "checkpoints/baseline",
+  "output_dir": "checkpoints/mla_w_dense",
   
   "use_mla": true,
   
