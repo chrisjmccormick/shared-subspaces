@@ -1,3 +1,4 @@
+import json
 import torch
 import pytest
 import sys
@@ -10,21 +11,43 @@ if str(PROJECT_ROOT) not in sys.path:
 from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 from models.layers.mla_attention import (
     DeepseekV3Attention,
-    DeepseekV3Config,
     DeepseekV3RotaryEmbedding,
 )
+from transformers import DeepseekV3Config
+
+BASE_CONFIG = Path(__file__).resolve().with_name("test_config.json")
+
+
+def load_config(overrides=None):
+    """Load the base JSON config and apply any overrides."""
+    with open(BASE_CONFIG) as f:
+        cfg = json.load(f)
+
+    if "stats" not in cfg:
+        cfg["stats"] = {}
+
+    if overrides:
+        cfg["model"].update(overrides)
+
+    valid_keys = set(SubspaceBertConfig.__init__.__code__.co_varnames) - {"self", "kwargs"}
+    extra_keys = set(cfg["model"]) - valid_keys
+    if extra_keys:
+        raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
+
+    return SubspaceBertConfig(**cfg["model"])
 
 
 def test_custom_bert_forward():
-    config = SubspaceBertConfig(
-        vocab_size=100,
-        hidden_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=4,
-        intermediate_size=64,
-    )
-    # Use standard attention implementation
-    config._attn_implementation = "eager"
+    overrides = {
+        "vocab_size": 100,
+        "hidden_size": 32,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 64,
+        "use_mla": False,
+        "attention_backend": "eager",
+    }
+    config = load_config(overrides)
     model = SubspaceBertForMaskedLM(config)
     # generate random input ids (batch_size=2, seq_len=8)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
@@ -48,6 +71,7 @@ def test_deepseek_attention_forward():
         attention_dropout_prob=0.0,
         rms_norm_eps=1e-6,
     )
+    ds_config.output_subspace = False
     ds_config._attn_implementation = "eager"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
@@ -82,6 +106,7 @@ def test_deepseek_attention_with_output_latent():
         use_output_latent=True,
         o_lora_rank=32,
     )
+    ds_config.output_subspace = True
     ds_config._attn_implementation = "eager"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
@@ -131,16 +156,17 @@ def test_deepseek_attention_flash():
 """
 
 def test_custom_bert_with_mla():
-    config = SubspaceBertConfig(
-        vocab_size=100,
-        hidden_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=4,
-        intermediate_size=64,
-    )
-    config._attn_implementation = "eager" # Allows for manual implementation.
-    config.use_mla = True # Use this to choose MLA instead.
-    config.output_subspace = False
+    overrides = {
+        "vocab_size": 100,
+        "hidden_size": 32,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 64,
+        "use_mla": True,
+        "output_subspace": False,
+        "attention_backend": "eager",
+    }
+    config = load_config(overrides)
     model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
@@ -148,16 +174,17 @@ def test_custom_bert_with_mla():
 
 
 def test_custom_bert_with_mla_output_latent():
-    config = SubspaceBertConfig(
-        vocab_size=100,
-        hidden_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=4,
-        intermediate_size=64,
-    )
-    config._attn_implementation = "eager" # Allows for manual implementation.
-    config.use_mla = True # Use this to choose MLA instead.
-    config.output_subspace = True
+    overrides = {
+        "vocab_size": 100,
+        "hidden_size": 32,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 64,
+        "use_mla": True,
+        "output_subspace": True,
+        "attention_backend": "eager",
+    }
+    config = load_config(overrides)
     model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
@@ -166,16 +193,17 @@ def test_custom_bert_with_mla_output_latent():
 
 def test_mla_with_dense_prefix_layers():
     """Ensure dense prefix layers fall back to standard MHA."""
-    config = SubspaceBertConfig(
-        vocab_size=100,
-        hidden_size=32,
-        num_hidden_layers=6,
-        num_attention_heads=4,
-        intermediate_size=64,
-        use_mla=True,
-        num_dense_layers=2,
-    )
-    config._attn_implementation = "eager"
+    overrides = {
+        "vocab_size": 100,
+        "hidden_size": 32,
+        "num_hidden_layers": 6,
+        "num_attention_heads": 4,
+        "intermediate_size": 64,
+        "use_mla": True,
+        "num_dense_layers": 2,
+        "attention_backend": "eager",
+    }
+    config = load_config(overrides)
     model = SubspaceBertForMaskedLM(config)
 
     # First layer should use standard attention
@@ -190,17 +218,18 @@ def test_mla_with_dense_prefix_layers():
 
 def test_decomposed_ffn():
     """Ensure decomposed FFN modules can replace dense ones."""
-    config = SubspaceBertConfig(
-        vocab_size=100,
-        hidden_size=32,
-        num_hidden_layers=6,
-        num_attention_heads=4,
-        intermediate_size=64,
-        use_decomp_mlp=True,
-        ffn_rank=16,
-        num_dense_layers=2
-    )
-    config._attn_implementation = "eager"
+    overrides = {
+        "vocab_size": 100,
+        "hidden_size": 32,
+        "num_hidden_layers": 6,
+        "num_attention_heads": 4,
+        "intermediate_size": 64,
+        "ffn_decompose": True,
+        "ffn_rank": 16,
+        "num_dense_layers": 2,
+        "attention_backend": "eager",
+    }
+    config = load_config(overrides)
     model = SubspaceBertForMaskedLM(config)
 
     # TODO - Confirm that the first two layers are still dense, e.g.
