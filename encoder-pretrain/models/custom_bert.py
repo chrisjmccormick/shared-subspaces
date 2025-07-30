@@ -47,6 +47,11 @@ from transformers.modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
+try:
+    from transformers.modeling_tf_utils import load_tf_weights_in_bert
+except Exception:  # pragma: no cover - optional dependency
+    def load_tf_weights_in_bert(*args, **kwargs):
+        raise NotImplementedError("h5py is required for loading TF weights")
 from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import apply_chunking_to_forward, find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import ModelOutput, auto_docstring, get_torch_version, logging
