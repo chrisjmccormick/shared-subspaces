@@ -304,7 +304,7 @@ def main():
         processing_class=tokenizer, # New argument name, allows for other modalities.
         data_collator=data_collator,
     )
-)
+
     # =====================
     #     Run Training
     # =====================
