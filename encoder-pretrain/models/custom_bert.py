@@ -54,85 +54,12 @@ from .configuration_bert import SubspaceBertConfig
 # -------------------------------------------------------------
 # Modified: Import DeepSeek MLA components used in our custom mode.
 from .layers.mla_attention import DeepseekV3Attention, DeepseekV3RotaryEmbedding
-from .layers.configuration_deepseek_v3 import DeepseekV3Config
 # -------------------------------------------------------------
 
 
 
 logger = logging.get_logger(__name__)
 
-
-def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
-    """Load tf checkpoints in a pytorch model."""
-    try:
-        import re
-
-        import numpy as np
-        import tensorflow as tf
-    except ImportError:
-        logger.error(
-            "Loading a TensorFlow model in PyTorch, requires TensorFlow to be installed. Please see "
-            "https://www.tensorflow.org/install/ for installation instructions."
-        )
-        raise
-    tf_path = os.path.abspath(tf_checkpoint_path)
-    logger.info(f"Converting TensorFlow checkpoint from {tf_path}")
-    # Load weights from TF model
-    init_vars = tf.train.list_variables(tf_path)
-    names = []
-    arrays = []
-    for name, shape in init_vars:
-        logger.info(f"Loading TF weight {name} with shape {shape}")
-        array = tf.train.load_variable(tf_path, name)
-        names.append(name)
-        arrays.append(array)
-
-    for name, array in zip(names, arrays):
-        name = name.split("/")
-        # adam_v and adam_m are variables used in AdamWeightDecayOptimizer to calculated m and v
-        # which are not required for using pretrained model
-        if any(
-            n in ["adam_v", "adam_m", "AdamWeightDecayOptimizer", "AdamWeightDecayOptimizer_1", "global_step"]
-            for n in name
-        ):
-            logger.info(f"Skipping {'/'.join(name)}")
-            continue
-        pointer = model
-        for m_name in name:
-            if re.fullmatch(r"[A-Za-z]+_\d+", m_name):
-                scope_names = re.split(r"_(\d+)", m_name)
-            else:
-                scope_names = [m_name]
-            if scope_names[0] == "kernel" or scope_names[0] == "gamma":
-                pointer = getattr(pointer, "weight")
-            elif scope_names[0] == "output_bias" or scope_names[0] == "beta":
-                pointer = getattr(pointer, "bias")
-            elif scope_names[0] == "output_weights":
-                pointer = getattr(pointer, "weight")
-            elif scope_names[0] == "squad":
-                pointer = getattr(pointer, "classifier")
-            else:
-                try:
-                    pointer = getattr(pointer, scope_names[0])
-                except AttributeError:
-                    logger.info(f"Skipping {'/'.join(name)}")
-                    continue
-            if len(scope_names) >= 2:
-                num = int(scope_names[1])
-                pointer = pointer[num]
-        if m_name[-11:] == "_embeddings":
-            pointer = getattr(pointer, "weight")
-        elif m_name == "kernel":
-            array = np.transpose(array)
-        try:
-            if pointer.shape != array.shape:
-                raise ValueError(f"Pointer shape {pointer.shape} and array shape {array.shape} mismatched")
-        except ValueError as e:
-            e.args += (pointer.shape, array.shape)
-            raise
-        logger.info(f"Initialize PyTorch weight {name}")
-        pointer.data = torch.from_numpy(array)
-    return model
 
 
 class BertEmbeddings(nn.Module):
@@ -476,39 +403,9 @@ class BertAttention(nn.Module):
         # Modified: Switch to MLA when requested via config.use_mla.
         if config.use_mla:
             
-            # Initialize a DS-V3 config object for this attention block.
-            ds_config = DeepseekV3Config(
-                hidden_size=config.hidden_size,
-                intermediate_size=config.intermediate_size,
-                num_hidden_layers=config.num_hidden_layers,
-                num_attention_heads=config.num_attention_heads,
-                num_key_value_heads=config.num_attention_heads,
-
-                kv_lora_rank=config.kv_lora_rank,
-                q_lora_rank=config.q_lora_rank,
-                qk_rope_head_dim=config.qk_rope_head_dim,
-                v_head_dim=config.v_head_dim,
-                qk_nope_head_dim=config.qk_nope_head_dim,
-
-                output_subspace=config.output_subspace,
-                o_lora_rank=config.o_lora_rank,
-
-                max_position_embeddings=config.max_position_embeddings,
-                attention_dropout=config.attention_probs_dropout_prob,
-                rms_norm_eps=config.layer_norm_eps,
-                # ---------------------------------------------
-                # Pass along the selected attention backend so
-                # DeepSeekV3Attention uses the same implementation
-                # (eager, sdpa, or flash) as the parent BERT config.
-                attention_backend=config.attention_backend,
-            )
-            
-            # Set the attention implementation directly.
-            ds_config._attn_implementation = config._attn_implementation
-            
             # Instantiate 
-            self.self = DeepseekV3Attention(ds_config, layer_idx=0)
-            self.rotary_emb = DeepseekV3RotaryEmbedding(ds_config)
+            self.self = DeepseekV3Attention(config, layer_idx=0)
+            self.rotary_emb = DeepseekV3RotaryEmbedding(config)
         # ---------------------------------------------------
         else:
             self.self = attn_cls(config, position_embedding_type=position_embedding_type)

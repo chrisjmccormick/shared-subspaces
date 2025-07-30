@@ -18,7 +18,8 @@ from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
 # Local modules (copied into repo)
 from models.layers.cache_utils import Cache, DynamicCache
-from models.layers.configuration_deepseek_v3 import DeepseekV3Config
+from models.configuration_bert import SubspaceBertConfig
+
 
 # 🟡 Optional: For future support (still unused unless you reintroduce dynamic attention backend)
 
@@ -58,7 +59,7 @@ class DeepseekV3RMSNorm(nn.Module):
 
 
 class DeepseekV3RotaryEmbedding(nn.Module):
-    def __init__(self, config: DeepseekV3Config, device=None):
+    def __init__(self, config: SubspaceBertConfig, device=None):
         super().__init__()
         # BC: "rope_type" was originally "type"
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
@@ -228,7 +229,7 @@ def yarn_get_mscale(scale=1, mscale=1):
 class DeepseekV3Attention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
-    def __init__(self, config: DeepseekV3Config, layer_idx: int):
+    def __init__(self, config: SubspaceBertConfig, layer_idx: int):
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx

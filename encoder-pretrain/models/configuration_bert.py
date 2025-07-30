@@ -1,102 +1,78 @@
-# coding=utf-8
-# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""BERT model configuration"""
-
-from collections import OrderedDict
-from collections.abc import Mapping
-
 from transformers.configuration_utils import PretrainedConfig
-from transformers.onnx import OnnxConfig
-from transformers.utils import logging
-
-
-logger = logging.get_logger(__name__)
-
+from transformers.modeling_rope_utils import rope_config_validation
 
 class SubspaceBertConfig(PretrainedConfig):
     r"""
-    Configuration class for the `SubspaceBertModel`.  This is copied from
-    HuggingFace's `BertConfig` and extended with additional options used in this
-    project (e.g. Multihead Latent Attention).
+    Configuration class for SubspaceBERT.
 
-    Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
-    documentation from [`PretrainedConfig`] for more information.
+    Extends the HuggingFace `PretrainedConfig` to support architectural variations including:
+    - Multi-Head Latent Attention (MLA)
+    - Decomposed MLPs (low-rank FFNs)
+    - Flexible attention backends (eager, flash, sdpa)
+    - Explicit shared subspaces for Q, K, V, and O projections
 
+    This config does not infer any defaults based on `hidden_size`. All dimensions and ranks must be explicitly specified. 
+    If required values are missing, a `ValueError` is raised during initialization.
 
-    Args:
-        vocab_size (`int`, *optional*, defaults to 30522):
-            Vocabulary size of the BERT model. Defines the number of different tokens that can be represented by the
-            `inputs_ids` passed when calling [`BertModel`] or [`TFBertModel`].
-        hidden_size (`int`, *optional*, defaults to 768):
-            Dimensionality of the encoder layers and the pooler layer.
-        num_hidden_layers (`int`, *optional*, defaults to 12):
-            Number of hidden layers in the Transformer encoder.
-        num_attention_heads (`int`, *optional*, defaults to 12):
-            Number of attention heads for each attention layer in the Transformer encoder.
-        intermediate_size (`int`, *optional*, defaults to 3072):
-            Dimensionality of the "intermediate" (often named feed-forward) layer in the Transformer encoder.
-        hidden_act (`str` or `Callable`, *optional*, defaults to `"gelu"`):
-            The non-linear activation function (function or string) in the encoder and pooler. If string, `"gelu"`,
-            `"relu"`, `"silu"` and `"gelu_new"` are supported.
-        hidden_dropout_prob (`float`, *optional*, defaults to 0.1):
-            The dropout probability for all fully connected layers in the embeddings, encoder, and pooler.
-        attention_probs_dropout_prob (`float`, *optional*, defaults to 0.1):
-            The dropout ratio for the attention probabilities.
-        max_position_embeddings (`int`, *optional*, defaults to 512):
-            The maximum sequence length that this model might ever be used with. Typically set this to something large
-            just in case (e.g., 512 or 1024 or 2048).
-        type_vocab_size (`int`, *optional*, defaults to 2):
-            The vocabulary size of the `token_type_ids` passed when calling [`BertModel`] or [`TFBertModel`].
-        initializer_range (`float`, *optional*, defaults to 0.02):
-            The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
-        layer_norm_eps (`float`, *optional*, defaults to 1e-12):
-            The epsilon used by the layer normalization layers.
-        position_embedding_type (`str`, *optional*, defaults to `"absolute"`):
-            Type of position embedding. Choose one of `"absolute"`, `"relative_key"`, `"relative_key_query"`. For
-            positional embeddings use `"absolute"`. For more information on `"relative_key"`, please refer to
-            [Self-Attention with Relative Position Representations (Shaw et al.)](https://huggingface.co/papers/1803.02155).
-            For more information on `"relative_key_query"`, please refer to *Method 4* in [Improve Transformer Models
-            with Better Relative Position Embeddings (Huang et al.)](https://huggingface.co/papers/2009.13658).
-        is_decoder (`bool`, *optional*, defaults to `False`):
-            Whether the model is used as a decoder or not. If `False`, the model is used as an encoder.
-        use_cache (`bool`, *optional*, defaults to `True`):
-            Whether or not the model should return the last key/values attentions (not used by all models). Only
-            relevant if `config.is_decoder=True`.
-        classifier_dropout (`float`, *optional*):
-            The dropout ratio for the classification head.
+    ----------------------
+    Core BERT Parameters:
+    ----------------------
+    - vocab_size (`int`) — Vocabulary size.
+    - hidden_size (`int`) — Model hidden dimension.
+    - num_hidden_layers (`int`) — Number of transformer blocks.
+    - num_attention_heads (`int`) — Number of attention heads.
+    - intermediate_size (`int`) — Feed-forward hidden dimension.
+    - hidden_act (`str`) — Activation function.
+    - hidden_dropout_prob (`float`) — Dropout after projections and FFNs.
+    - attention_probs_dropout_prob (`float`) — Dropout on attention weights.
+    - max_position_embeddings (`int`) — Max sequence length.
+    - type_vocab_size (`int`) — Size of `token_type_ids` embedding.
+    - initializer_range (`float`) — Stddev of weight init.
+    - layer_norm_eps (`float`) — Epsilon for LayerNorm.
+    - pad_token_id (`int`) — ID of the padding token.
+    - position_embedding_type (`str`) — "absolute", "relative_key", or "relative_key_query".
+    - use_cache (`bool`) — Whether to use KV cache (relevant for decoding).
+    - classifier_dropout (`float` or None) — Dropout for final classifier.
 
-    Examples:
+    ----------------------
+    Multi-Head Latent Attention (MLA):
+    ----------------------
+    - use_mla (`bool`) — Whether to enable MLA.
+    - q_lora_rank (`int`) — Rank of the shared query subspace.
+    - kv_lora_rank (`int`) — Rank of the shared key/value subspace.
+    - qk_rope_head_dim (`int`) — Dimensionality of the rotary-position-encoded (RoPE) head subspace.
+    - qk_nope_head_dim (`int`) — Dimensionality of the non-RoPE part of query/key heads.
+    - v_head_dim (`int`) — Per-head value dimensionality.
+    - output_subspace (`bool`) — Whether to use a shared latent subspace for output projections.
+    - o_lora_rank (`int`) — Rank of the shared output subspace (required if `output_subspace=True`).
+    - rope_theta (`float`) — Base frequency used for RoPE.
+    - rope_scaling (`dict` or None) — HF-style scaling dict for RoPE.
+    - rope_interleave (`bool`) — Whether to interleave RoPE dimensions.
+    - attention_bias (`bool`) — Whether to include bias terms in Q/K/V projections.
+    - num_dense_layers (`int`) — Number of leading layers that use dense MHA instead of MLA.
+    - attention_backend (`str`) — Must be one of `"eager"`, `"flash"`, or `"sdpa"`.
 
-    ```python
-    >>> from transformers import BertConfig, BertModel
+    ----------------------
+    Decomposed MLP (Low-Rank FFN):
+    ----------------------
+    - ffn_decompose (`bool`) — Whether to enable low-rank FFNs.
+    - ffn_rank (`int`) — Rank of the shared FFN latent space (required if `ffn_decompose=True`).
 
-    >>> # Initializing a BERT google-bert/bert-base-uncased style configuration
-    >>> configuration = BertConfig()
-
-    >>> # Initializing a model (with random weights) from the google-bert/bert-base-uncased style configuration
-    >>> model = BertModel(configuration)
-
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-    ```"""
-
+    ----------------------
+    Validation Behavior:
+    ----------------------
+    Raises `ValueError` at init time if:
+    - MLA is enabled and any required rank/dim fields are unset.
+    - FFN decomposition is enabled without specifying `ffn_rank`.
+    - An unknown `attention_backend` is provided.
+    """
+  
+    
     model_type = "bert"
 
     def __init__(
         self,
+        # === Core BERT ===
         vocab_size=30522,
         hidden_size=768,
         num_hidden_layers=12,
@@ -113,35 +89,34 @@ class SubspaceBertConfig(PretrainedConfig):
         position_embedding_type="absolute",
         use_cache=True,
         classifier_dropout=None,
-        # ------------------------------------------------
-        # Modified: Extra params to support Multihead Latent Attention (MLA).
+
+        # === Multi-Head Latent Attention ===
         use_mla=False,
-        kv_lora_rank=None,
         q_lora_rank=None,
+        kv_lora_rank=None,
         qk_rope_head_dim=None,
-        v_head_dim=None,
         qk_nope_head_dim=0,
+        v_head_dim=None,
         output_subspace=False,
         o_lora_rank=None,
-        # ------------------------------------------------
-        # Modified: Number of initial layers that use dense
-        # attention instead of MLA.
-        num_dense_layers=0,
-        # ------------------------------------------------
-        # Modified: Parameters for decomposed FFNs.
+        attention_backend="eager",
+        rope_theta=10000.0,
+        rope_scaling=None,
+        rope_interleave=False,
+        attention_bias=False,
+
+        # === MLA Composition ===
+        num_dense_layers=0,  # dense MHA layers before MLA starts
+
+        # === Decomposed MLP ===
         ffn_decompose=False,
         ffn_rank=None,
-        # ------------------------------------------------
-        # Modified: Flag to select attention backend.  This
-        # replaces use of `config._attn_implementation` so
-        # we can easily toggle between eager, sdpa, or flash
-        # attention without relying on HF's property.
-        attention_backend="eager",
-        # ------------------------------------------------
+
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
+        # === Core BERT ===
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -158,71 +133,58 @@ class SubspaceBertConfig(PretrainedConfig):
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
 
-        # ------------------------------------------------
-        # Modified: Initialize MLA-related attributes.
+        # === MLA ===
         self.use_mla = use_mla
-        self.kv_lora_rank = kv_lora_rank if kv_lora_rank is not None else hidden_size
-        self.q_lora_rank = q_lora_rank if q_lora_rank is not None else hidden_size
-        self.qk_rope_head_dim = (
-            qk_rope_head_dim if qk_rope_head_dim is not None else hidden_size // num_attention_heads
-        )
-        self.v_head_dim = v_head_dim if v_head_dim is not None else hidden_size // num_attention_heads
+        self.q_lora_rank = q_lora_rank
+        self.kv_lora_rank = kv_lora_rank
+        self.qk_rope_head_dim = qk_rope_head_dim
         self.qk_nope_head_dim = qk_nope_head_dim
+        self.v_head_dim = v_head_dim
         self.output_subspace = output_subspace
-        self.o_lora_rank = o_lora_rank if o_lora_rank is not None else hidden_size
-        # When using MLA, the first `num_dense_layers` will still use
-        # standard MHA. This mirrors practices from some MoE models.
+        self.o_lora_rank = o_lora_rank
+        self.rope_theta = rope_theta
+        self.rope_scaling = rope_scaling
+        self.rope_interleave = rope_interleave
+        self.attention_bias = attention_bias
         self.num_dense_layers = num_dense_layers
-        # ------------------------------------------------
-        # Modified: Store decomposed FFN settings.
-        self.ffn_decompose = ffn_decompose
-        self.ffn_rank = ffn_rank if ffn_rank is not None else hidden_size
-        # ------------------------------------------------
 
-        # ------------------------------------------------
-        # Modified: Set the attention backend and map it to
-        # HuggingFace's internal `_attn_implementation`.
+        # === Decomposed FFN ===
+        self.ffn_decompose = ffn_decompose
+        self.ffn_rank = ffn_rank
+
+        # === Attention backend ===
         self.attention_backend = attention_backend
         if attention_backend == "flash":
             self._attn_implementation = "flash_attention_2"
         elif attention_backend == "sdpa":
             self._attn_implementation = "sdpa"
-        else:
+        elif attention_backend == "eager":
             self._attn_implementation = "eager"
-        # ------------------------------------------------
+        else:
+            raise ValueError(f"Unknown attention backend: {attention_backend}")
 
-        # ------------------------------------------------
-        # Modified: Print out key configuration settings so
-        # we can track how options like `num_dense_layers`
-        # are being passed around during initialization.
+        # === Validation ===
+        self._validate()
+
         print(
-             f"  > SubspaceBertConfig.init - {self.num_hidden_layers}l - mla{self.use_mla} - ndense{self.num_dense_layers} - dcmp{self.ffn_decompose}\n"
+            f"  > SubspaceBertConfig.init - {self.num_hidden_layers}l - mla{self.use_mla} - ndense{self.num_dense_layers} - dcmp{self.ffn_decompose}\n"
         )
         print(f"    - attention backend: {self.attention_backend}\n")
-        # ------------------------------------------------
 
+    def _validate(self):
+        # === MLA Validation ===
+        if self.use_mla:
+            if self.q_lora_rank is None:
+                raise ValueError("`q_lora_rank` must be set when `use_mla=True`")
+            if self.kv_lora_rank is None:
+                raise ValueError("`kv_lora_rank` must be set when `use_mla=True`")
+            if self.qk_rope_head_dim is None:
+                raise ValueError("`qk_rope_head_dim` must be set when `use_mla=True`")
+            if self.v_head_dim is None:
+                raise ValueError("`v_head_dim` must be set when `use_mla=True`")
+            if self.output_subspace and self.o_lora_rank is None:
+                raise ValueError("`o_lora_rank` must be set when `output_subspace=True`")
 
-class SubspaceBertOnnxConfig(OnnxConfig):
-    @property
-    def inputs(self) -> Mapping[str, Mapping[int, str]]:
-        if self.task == "multiple-choice":
-            dynamic_axis = {0: "batch", 1: "choice", 2: "sequence"}
-        else:
-            dynamic_axis = {0: "batch", 1: "sequence"}
-        return OrderedDict(
-            [
-                ("input_ids", dynamic_axis),
-                ("attention_mask", dynamic_axis),
-                ("token_type_ids", dynamic_axis),
-            ]
-        )
-
-
-__all__ = ["SubspaceBertConfig", "SubspaceBertOnnxConfig"]
-
-# ---------------------------------------------------------------------------
-# Aliases for backward compatibility with earlier code referencing `BertConfig`
-# and `BertOnnxConfig` directly.  This keeps old imports working while we
-# transition to the new `SubspaceBert*` names.
-BertConfig = SubspaceBertConfig
-BertOnnxConfig = SubspaceBertOnnxConfig
+        # === Decomposed FFN ===
+        if self.ffn_decompose and self.ffn_rank is None:
+            raise ValueError("`ffn_rank` must be set when `ffn_decompose=True`")

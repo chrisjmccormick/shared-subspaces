@@ -1,51 +1,78 @@
 {
-  "model_type": "bert",
+  "shorthand": "mla.64.48.64, dense.2, dcmp.1024.xxx, model.d256.l6, ah.8.32"
   
-  "num_hidden_layers": 6,
+  "notes": "Will be used as part of a sweep over FFN decomposition ranks."
+  
+  "model": {
+    "model_type":           "bert",
+	
+	"hidden_size":          256,
+    "num_hidden_layers":    6,
+    "intermediate_size":    1024,
+    "hidden_act":           "gelu",
+    
+    "use_mla":           true,
+	
+	"num_dense_layers":  2,	
+    "q_lora_rank":       64,
+    "kv_lora_rank":      48,
+	
+	"num_attention_heads":  8,
+    "v_head_dim":           32,
+	"attention_bias":       false,	
+	
+	"output_subspace":   true,
+    "o_lora_rank":       64,
+	
+    "attention_backend": "flash",
 
-  "num_dense_layers": 2,
-  
-  "hidden_size": 256,
-  
-  "num_attention_heads": 8,
-  
-  "intermediate_size": 1024,
-  
-  "max_position_embeddings": 128,
-  "max_seq_length": 128,
-  "hidden_act": "gelu",
-  "hidden_dropout_prob": 0.1,
-  "attention_probs_dropout_prob": 0.1,
+    "ffn_decompose":     false,
+    "ffn_rank":          null
 
-  "q_lora_rank": 64,
-  "kv_lora_rank": 48,
-  "o_lora_rank": 64,
-  
-  "qk_rope_head_dim": 16,
-  "v_head_dim": 32,
-  "qk_nope_head_dim": 32,
-  
-  "fp16": true,
-  
-  "train_batch_size": 64,
-  "eval_batch_size": 64,
-  "learning_rate": 5e-4,
-  "num_train_epochs": 3,
-  
-  "mlm_probability": 0.15,
-  
-  "dataset_name": "wikitext",
-  "dataset_config": "wikitext-2-raw-v1",
+	"hidden_dropout_prob":  0.1,
+    "attention_probs_dropout_prob": 0.1,
+    "classifier_dropout":   null,
+    
+	"use_cache":            true,
+    
+    "initializer_range":    0.02,
+    "layer_norm_eps":       1e-12,
 
-  "seed": 42,
-
-  "output_dir": "checkpoints/mla_output_decompose",
+    "vocab_size":           30522,
+    "type_vocab_size":      2,
+    "pad_token_id":         0,
+	"rope_theta":           10000.0,
+    "rope_scaling":         null,
+    "rope_interleave":      false,
+    "position_embedding_type":  "absolute",
+	"max_position_embeddings":  128,
+    "qk_rope_head_dim":  16,
+    "qk_nope_head_dim":  32,
+  },
   
-  "use_mla": true,
+  "pre_train": {
+    "output_dir":        "checkpoints/mla_output_decompose"
+	"seed":              42,
+	
+    "train_batch_size":  64,
+    "learning_rate":     5e-4,
+    "num_train_epochs":  3,
+	
+    "mlm_probability":   0.15,
+    "dataset_name":      "wikitext",
+    "dataset_config":    "wikitext-2-raw-v1",
+    
+	"max_seq_length":    128,
+	"eval_batch_size":   64,
+	
+    "fp16":              true,    
+  }
   
-  "output_subspace": true,
-  "ffn_decompose": true,
-  "ffn_rank": 128,
-  
-  "attention_backend": "sdpa"
+  "fine_tune": {
+    "task":         "sst2",
+	"batch_size":   16,
+	"lr":           2e-5,
+	"epochs":       3,
+	"max_length":   128,
+  }
 }

@@ -68,14 +68,6 @@ def main():
     with open(args.config) as f:
         cfg = json.load(f)
 
-    # Some keys in the configs have older names. Normalize them here so the rest
-    # of the script can rely on a consistent set of fields.
-    cfg["ffn_decompose"] = cfg.get("ffn_decompose", cfg.get("use_decomp_mlp", False))
-    cfg["output_subspace"] = cfg.get("output_subspace", cfg.get("use_output_latent", False))
-    # Normalize attention backend field so configs can use
-    # "attention_backend" or rely on the default of "eager".
-    cfg["attention_backend"] = cfg.get("attention_backend", "eager")
-
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
     # Set random seed for reproducibility
@@ -125,34 +117,21 @@ def main():
         mlm_probability=cfg["mlm_probability"] # Default is 15%
     )
 
-    #model = CustomBertForMaskedLM.from_config(cfg)
+    with open(args.config) as f:
+        config_dict = json.load(f)
 
-    bert_config = SubspaceBertConfig(
-        vocab_size=cfg["vocab_size"],
-        hidden_size=cfg["hidden_size"],
-        num_hidden_layers=cfg["num_hidden_layers"],
-        num_attention_heads=cfg["num_attention_heads"],
-        intermediate_size=cfg["intermediate_size"],
-        max_position_embeddings=cfg.get("max_position_embeddings", 512),
-        type_vocab_size=cfg.get("type_vocab_size", 2),
-        hidden_act=cfg.get("hidden_act", "gelu"),
-        hidden_dropout_prob=cfg.get("hidden_dropout_prob", 0.1),
-        attention_probs_dropout_prob=cfg.get("attention_probs_dropout_prob", 0.1),
-        use_mla=cfg.get("use_mla", False),
-        kv_lora_rank=cfg.get("kv_lora_rank"),
-        q_lora_rank=cfg.get("q_lora_rank"),
-        o_lora_rank=cfg.get("o_lora_rank"),
-        qk_rope_head_dim=cfg.get("qk_rope_head_dim"),
-        v_head_dim=cfg.get("v_head_dim"),
-        qk_nope_head_dim=cfg.get("qk_nope_head_dim"),
-        output_subspace=cfg.get("output_subspace", False),
-        num_dense_layers=cfg.get("num_dense_layers"),
-        ffn_rank=cfg.get("ffn_rank"),
-        # Pass through the selected attention backend so the
-        # model config knows whether to use eager, sdpa, or flash
-        # attention implementations.
-        attention_backend=cfg.get("attention_backend", "eager")
-    )
+    # Strict key check
+    valid_keys = SubspaceBertConfig.__init__.__code__.co_varnames
+    valid_keys = set(valid_keys) - {"self", "kwargs"}
+    extra_keys = set(config_dict) - valid_keys
+    if extra_keys:
+        raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
+
+    # Will raise TypeError if required args are missing
+    config = SubspaceBertConfig(**config_dict)
+    
+    # Check the configuration for mismatched settings.
+    config.validate()
 
     model = SubspaceBertForMaskedLM(bert_config)
     
