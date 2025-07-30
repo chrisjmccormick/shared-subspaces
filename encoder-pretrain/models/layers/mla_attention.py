@@ -15,6 +15,7 @@ from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_u
 from transformers.utils import logging
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+from transformers.configuration_utils import PretrainedConfig
 
 # Local modules (copied into repo)
 from models.layers.cache_utils import Cache, DynamicCache
