@@ -3,7 +3,7 @@
   
   "num_hidden_layers": 6,
 
-  "num_dense_layers": 0,
+  "num_dense_layers": 1,
   
   "hidden_size": 256,
   
@@ -24,8 +24,6 @@
   "qk_rope_head_dim": 16,
   "v_head_dim": 32,
   "qk_nope_head_dim": 32,
-
-  "use_output_latent": true,
   
   "fp16": true,
   
@@ -46,5 +44,6 @@
   "use_mla": true,
   
   "output_subspace": true,
-  "use_mlp_decomp": true
+  "ffn_decompose": true,
+  "ffn_rank": 128
 }
