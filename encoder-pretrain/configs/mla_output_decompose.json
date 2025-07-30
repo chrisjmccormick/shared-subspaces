@@ -1,7 +1,7 @@
 {
-  "shorthand": "mla.64.48.64, dense.2, dcmp.1024.xxx, model.d256.l6, ah.8.32"
+  "shorthand": "mla.64.48.64, dense.2, dcmp.1024.xxx, model.d256.l6, ah.8.32",
   
-  "notes": "Will be used as part of a sweep over FFN decomposition ranks."
+  "notes": "Will be used as part of a sweep over FFN decomposition ranks.",
   
   "model": {
     "model_type":           "bert",
@@ -27,7 +27,7 @@
     "attention_backend": "flash",
 
     "ffn_decompose":     false,
-    "ffn_rank":          null
+    "ffn_rank":          null,
 
 	"hidden_dropout_prob":  0.1,
     "attention_dropout_prob": 0.1,
@@ -51,7 +51,7 @@
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/mla_output_decompose"
+    "output_dir":        "checkpoints/mla_output_decompose",
 	"seed":              42,
 	
     "train_batch_size":  64,
@@ -66,7 +66,7 @@
 	"eval_batch_size":   64,
 	
     "fp16":              true,    
-  }
+  },
   
   "fine_tune": {
     "task":         "sst2",
