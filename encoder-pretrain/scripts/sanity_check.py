@@ -1,24 +1,30 @@
-from transformers import AutoTokenizer, BertForMaskedLM
+from transformers import AutoTokenizer
 import torch
 from pathlib import Path
 import os
 
+
+from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
+
 # Load model from your training checkpoint directory
-model_path = "../checkpoints/baseline/"
 
 # Use the tokenizer you originally trained with
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-model_path = Path("../encoder-pretrain/checkpoints/baseline").resolve()
+model_path = Path("../encoder-pretrain/checkpoints/mla_w_output").resolve()
 
 # Confirm directory exists
 assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
+
+# Retrieve the run name used during pre-training so we can reuse it here.
+model_cfg = SubspaceBertConfig.from_pretrained(model_path)
+print("Run name:", getattr(model_cfg, "run_name", "pretrain"))
 
 
 print("Passing repo id as:", str(model_path))
 
 # Load the checkpoint
-model = BertForMaskedLM.from_pretrained(
+model = .from_pretrained(
     str(model_path),
     local_files_only=True,
     trust_remote_code=True,  # Usually safe for local loads
