@@ -195,7 +195,7 @@ def main():
     print('The model has {:} different named parameters.\n'.format(len(params)))
 
     # =====================
-    #     Total Params
+    #     Review Params
     # =====================
 
     total_params = 0
@@ -208,9 +208,46 @@ def main():
 
     # Print out final config
     for k, v in cfg.items():
-        print(f"{k:>15}: {v:>10}")
+        print(f"{k:>25}: {v:>10}")
   
     print("=============================\n")
+
+    """## Full Parameter List"""
+
+    display_bias = True # Excludes any 1-D parameters.
+
+    include_layers = []
+
+    print("Parameter Name                                              Dimensions       Total Values    Trainable\n")
+
+    for p_name, p in params:
+
+        # Loop through the parameter dimensions and delete any == 1.
+        p_size = list(p.size())
+
+        for i in range(len(p_size) - 1, -1, -1):
+            if p_size[i] == 1:
+                del p_size[i]
+
+        if len(p_size) == 1:
+            if not display_bias:
+                continue
+            p_dims = "{:>10,} x {:<10}".format(p.size()[0], "-")
+
+        elif len(p_size) == 2:
+            p_dims = "{:>10,} x {:<10,}".format(p.size()[0], p.size()[1])
+        elif len(p_size) == 3:
+            p_dims = "{:>10,} x {:,} x {:<10}".format(p.size()[0], p.size()[1], p.size()[2])
+        elif len(p_size) == 4:
+            p_dims = "{:>10,} x {:,} x {:,} x {:<10}".format(p.size()[0], p.size()[1], p.size()[2], p.size()[3])
+        else:
+            print("Unexpected: ", p.size(), p_name)
+            break
+
+        print("{:<55} {:}    {:>6}    {:}".format(p_name, p_dims, format_size(p.numel()), p.requires_grad))
+
+
+    print(f"\nTotal elements: {format_size(total_params)}\n")
 
 
     # ========================================
@@ -260,6 +297,13 @@ def main():
 
 
     run_name = f"{cfg['total_elements']} - {attn_str} - {mlp_str} - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+
+
+    print(run_name)
+
+
+
+
 
     wandb.init(
         project="encoder-pretrain", 
