@@ -243,6 +243,11 @@ class DeepseekV3Attention(nn.Module):
         self.kv_lora_rank = config.kv_lora_rank
         self.v_head_dim = config.v_head_dim
         self.qk_nope_head_dim = config.qk_nope_head_dim
+        
+        # This refers to the standard head size of the query and key heads.
+        # TODO - I believe it's redundant with qk_nope_head_dim. If so, I'd like to drop
+        #        the "nope" version.
+        self.qk_head_dim = config.qk_nope_head_dim
 
         # Additional attributes used by our MLA variant
         self.hidden_size = config.hidden_size
@@ -252,7 +257,7 @@ class DeepseekV3Attention(nn.Module):
         
         # Even without projections, we will still use the additional RoPE heads.
         if self.q_lora_rank is None:
-            self.q_proj = nn.Linear(config.hidden_size, self.num_heads * self.qk_nope_head_dim, bias=False)
+            self.q_proj = nn.Linear(config.hidden_size, self.num_heads * self.qk_head_dim, bias=False)
         
         else:
             self.q_a_proj = nn.Linear(config.hidden_size, config.q_lora_rank, bias=config.attention_bias)
