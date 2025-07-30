@@ -48,7 +48,7 @@ class CustomTrainer(Trainer):
     def __init__(self, *args, config=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config or {}
-
+ 
     def get_train_dataloader(self):
         """Return DataLoader using values from the config."""
         return DataLoader(
@@ -56,6 +56,7 @@ class CustomTrainer(Trainer):
             batch_size=self.args.train_batch_size,
             shuffle=True,
             collate_fn=self.data_collator,
+
             num_workers=self.config.get("pre_train", {}).get("num_workers", 4),
             pin_memory=self.config.get("pre_train", {}).get("pin_memory", True),
         )
