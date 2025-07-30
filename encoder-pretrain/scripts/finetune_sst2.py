@@ -13,34 +13,10 @@ from sklearn.metrics import matthews_corrcoef
 
 # For testing the transformers implementation:
 from transformers.modeling_outputs import SequenceClassifierOutput
-from transformers import BertForSequenceClassification
 
-# For testing our custom implementation:
+#from transformers import BertForSequenceClassification
 
-
-#from models.custom_bert_full import CustomBertForMaskedLM
-
-"""
-class CustomBertForSequenceClassification(nn.Module):
-    def __init__(self, pretrained_path, num_labels=2):
-        super().__init__()
-        self.bert_mlm = CustomBertForMaskedLM.from_pretrained(pretrained_path)
-        self.bert = self.bert_mlm.bert
-        self.classifier = nn.Linear(self.bert.config.hidden_size, num_labels)
-
-    def forward(self, input_ids, attention_mask, labels=None):
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        pooled_output = outputs.pooler_output
-        logits = self.classifier(pooled_output)
-        loss = None
-        if labels is not None:
-            loss = nn.functional.cross_entropy(logits, labels)
-        return SequenceClassifierOutput(
-            loss=loss,
-            logits=logits,
-        )
-
-"""
+from models.custom_bert import SubspaceBertForSequenceClassification
 
 # Filter out some unhelpful warnings cluttering the output.
 import warnings
@@ -106,6 +82,11 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
+    
+    # ======================
+    #       Dataset
+    # ======================
+    
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     
     #dataset = load_dataset("glue", "cola")
@@ -124,9 +105,16 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=config["batch_size"])
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"])
 
-    #model = CustomBertForSequenceClassification(pretrained_path=config["model_path"])
-    model = BertForSequenceClassification.from_pretrained(config["model_path"])
+    # ======================
+    #       Model
+    # ======================
+
+    model = SubspaceBertForSequenceClassification.from_pretrained(config["model_path"])
     model.to(device)
+
+    # ======================
+    #       Training
+    # ======================
 
     optimizer = AdamW(model.parameters(), lr=config["lr"])
     num_training_steps = config["epochs"] * len(train_loader)
