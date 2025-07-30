@@ -72,14 +72,6 @@ total_params = 0
 for p_name, p in params:
     total_params += p.numel()
 
-cfg["total_elements"] = format_size(total_params)
-
-print(f"Total elements: {cfg['total_elements']}\n")
-
-# Print out final config
-for k, v in cfg.items():
-    print(f"{k:>25}: {v:>10}")
-
 print("=============================\n")
 
 """## Full Parameter List"""
@@ -118,7 +110,6 @@ for p_name, p in params:
 
 
 print(f"\nTotal elements: {format_size(total_params)}\n")
-
 
 
 
