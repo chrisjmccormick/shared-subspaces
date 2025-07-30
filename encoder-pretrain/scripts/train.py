@@ -17,7 +17,8 @@ from transformers import (
     set_seed,
 )
 
-from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
+# This file exists in the 'scripts' subdirectory, go up a level to find 'models'.
+from ...models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
