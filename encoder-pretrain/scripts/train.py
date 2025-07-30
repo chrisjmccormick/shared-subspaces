@@ -171,6 +171,7 @@ def main():
         v_head_dim=cfg.get("v_head_dim"),
         qk_nope_head_dim=cfg.get("qk_nope_head_dim"),
         add_output_latent=cfg.get("use_output_latent", False),
+        num_dense_layers=cfg.get("num_dense_layers")
     )
 
     model = SubspaceBertForMaskedLM(bert_config)
