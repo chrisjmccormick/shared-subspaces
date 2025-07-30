@@ -298,6 +298,8 @@ def main():
 
     run_name = f"{cfg['total_elements']} - {attn_str} - {mlp_str} - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
 
+    cfg["run_name"] = run_name
+    model.config.run_name = run_name
 
     print(run_name)
 
