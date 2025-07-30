@@ -27,67 +27,67 @@ model = BertForMaskedLM.from_pretrained(
 model.eval()
 
 
-    print("\n======== Parameters ========")
+print("\n======== Parameters ========")
 
-    ## Get all of the model's parameters as a list of tuples.
-    params = list(model.named_parameters())
+## Get all of the model's parameters as a list of tuples.
+params = list(model.named_parameters())
 
-    print('The model has {:} different named parameters.\n'.format(len(params)))
+print('The model has {:} different named parameters.\n'.format(len(params)))
 
-    # =====================
-    #     Review Params
-    # =====================
+# =====================
+#     Review Params
+# =====================
 
-    total_params = 0
-    for p_name, p in params:
-        total_params += p.numel()
+total_params = 0
+for p_name, p in params:
+    total_params += p.numel()
 
-    cfg["total_elements"] = format_size(total_params)
+cfg["total_elements"] = format_size(total_params)
 
-    print(f"Total elements: {cfg['total_elements']}\n")
+print(f"Total elements: {cfg['total_elements']}\n")
 
-    # Print out final config
-    for k, v in cfg.items():
-        print(f"{k:>25}: {v:>10}")
-  
-    print("=============================\n")
+# Print out final config
+for k, v in cfg.items():
+    print(f"{k:>25}: {v:>10}")
 
-    """## Full Parameter List"""
+print("=============================\n")
 
-    display_bias = True # Excludes any 1-D parameters.
+"""## Full Parameter List"""
 
-    include_layers = []
+display_bias = True # Excludes any 1-D parameters.
 
-    print("Parameter Name                                              Dimensions       Total Values    Trainable\n")
+include_layers = []
 
-    for p_name, p in params:
+print("Parameter Name                                              Dimensions       Total Values    Trainable\n")
 
-        # Loop through the parameter dimensions and delete any == 1.
-        p_size = list(p.size())
+for p_name, p in params:
 
-        for i in range(len(p_size) - 1, -1, -1):
-            if p_size[i] == 1:
-                del p_size[i]
+    # Loop through the parameter dimensions and delete any == 1.
+    p_size = list(p.size())
 
-        if len(p_size) == 1:
-            if not display_bias:
-                continue
-            p_dims = "{:>10,} x {:<10}".format(p.size()[0], "-")
+    for i in range(len(p_size) - 1, -1, -1):
+        if p_size[i] == 1:
+            del p_size[i]
 
-        elif len(p_size) == 2:
-            p_dims = "{:>10,} x {:<10,}".format(p.size()[0], p.size()[1])
-        elif len(p_size) == 3:
-            p_dims = "{:>10,} x {:,} x {:<10}".format(p.size()[0], p.size()[1], p.size()[2])
-        elif len(p_size) == 4:
-            p_dims = "{:>10,} x {:,} x {:,} x {:<10}".format(p.size()[0], p.size()[1], p.size()[2], p.size()[3])
-        else:
-            print("Unexpected: ", p.size(), p_name)
-            break
+    if len(p_size) == 1:
+        if not display_bias:
+            continue
+        p_dims = "{:>10,} x {:<10}".format(p.size()[0], "-")
 
-        print("{:<55} {:}    {:>6}    {:}".format(p_name, p_dims, format_size(p.numel()), p.requires_grad))
+    elif len(p_size) == 2:
+        p_dims = "{:>10,} x {:<10,}".format(p.size()[0], p.size()[1])
+    elif len(p_size) == 3:
+        p_dims = "{:>10,} x {:,} x {:<10}".format(p.size()[0], p.size()[1], p.size()[2])
+    elif len(p_size) == 4:
+        p_dims = "{:>10,} x {:,} x {:,} x {:<10}".format(p.size()[0], p.size()[1], p.size()[2], p.size()[3])
+    else:
+        print("Unexpected: ", p.size(), p_name)
+        break
+
+    print("{:<55} {:}    {:>6}    {:}".format(p_name, p_dims, format_size(p.numel()), p.requires_grad))
 
 
-    print(f"\nTotal elements: {format_size(total_params)}\n")
+print(f"\nTotal elements: {format_size(total_params)}\n")
 
 
 
