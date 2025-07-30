@@ -40,6 +40,29 @@ def parse_args():
 """Helper utilities are imported from utils."""
 
 
+from torch.utils.data import DataLoader
+
+class CustomTrainer(Trainer):
+    def get_train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.args.train_batch_size,
+            shuffle=True,
+            collate_fn=self.data_collator,
+            num_workers=config["pre_train"].get("num_workers", 4),
+            pin_memory=config["pre_train"].get("pin_memory", True),
+        )
+
+    def get_eval_dataloader(self, eval_dataset=None):
+        eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+        return DataLoader(
+            eval_dataset,
+            batch_size=self.args.eval_batch_size,
+            collate_fn=self.data_collator,
+            num_workers=config["pre_train"].get("num_workers", 4),
+            pin_memory=config["pre_train"].get("pin_memory", True),
+        )
+
 
 def main():
     args = parse_args()
