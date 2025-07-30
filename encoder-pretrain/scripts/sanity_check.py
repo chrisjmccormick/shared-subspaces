@@ -26,6 +26,36 @@ model = BertForMaskedLM.from_pretrained(
 )
 model.eval()
 
+"""**Helper Function for Formatting Counts**"""
+
+def format_size(num):
+    """
+    This function iterates through a list of suffixes ('K', 'M', 'B') and
+    divides the input number by 1024 until the absolute value of the number is
+    less than 1024. Then, it formats the number with the appropriate suffix and
+    returns the result. If the number is larger than "B", it uses 'T'.
+    """
+    suffixes = [' ', 'K', 'M', 'B'] # Return an empty space if it's less than 1K,
+                                    # this helps highlight the larger values.
+
+    base = 1024
+
+    for suffix in suffixes:
+        if abs(num) < base:
+            if num % 1 != 0:
+                return f"{num:.2f}{suffix}"
+
+            else:
+                return f"{num:.0f}{suffix}"
+
+        num /= base
+
+    # Use "T" for anything larger.
+    if num % 1 != 0:
+        return f"{num:.2f}T"
+
+    else:
+        return f"{num:.0f}T"
 
 print("\n======== Parameters ========")
 
