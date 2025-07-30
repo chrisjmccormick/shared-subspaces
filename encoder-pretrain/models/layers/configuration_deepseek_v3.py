@@ -172,7 +172,8 @@ class DeepseekV3Config(PretrainedConfig):
         
         # ------------------------------------------------
         # Modified: Support additional output latent space
-        use_output_latent=False,
+        output_subspace=False,
+        use_output_latent=None,
         o_lora_rank=1536,
         # ------------------------------------------------
         
@@ -216,10 +217,12 @@ class DeepseekV3Config(PretrainedConfig):
         # ------------------------------------------------
         # Modified: store output latent options on the config
         # so they don't need to be manually overridden later.
-        self.use_output_latent = use_output_latent
+        if use_output_latent is not None:
+            output_subspace = use_output_latent
+        self.output_subspace = output_subspace
         # Keep backwards compatibility with older code that
         # checks `add_output_latent`.
-        self.add_output_latent = use_output_latent
+        self.add_output_latent = output_subspace
         self.o_lora_rank = o_lora_rank
         # ------------------------------------------------
         self.qk_head_dim = qk_nope_head_dim + qk_rope_head_dim

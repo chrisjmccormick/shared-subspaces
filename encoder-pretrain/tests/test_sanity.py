@@ -79,7 +79,7 @@ def test_deepseek_attention_with_output_latent():
         max_position_embeddings=16,
         attention_dropout=0.0,
         rms_norm_eps=1e-6,
-        use_output_latent=True,
+        output_subspace=True,
         o_lora_rank=32,
     )
     ds_config._attn_implementation = "eager"
@@ -140,7 +140,7 @@ def test_custom_bert_with_mla():
     )
     config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
-    config.add_output_latent = False
+    config.output_subspace = False
     model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
@@ -157,7 +157,7 @@ def test_custom_bert_with_mla_output_latent():
     )
     config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
-    config.add_output_latent = True
+    config.output_subspace = True
     model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
@@ -196,7 +196,7 @@ def test_decomposed_ffn():
         num_hidden_layers=6,
         num_attention_heads=4,
         intermediate_size=64,
-        use_decomp_mlp=True,
+        ffn_decompose=True,
         ffn_rank=16,
         num_dense_layers=2
     )

@@ -1,10 +1,11 @@
-print("Importing Packages...\n")
-
 import json
 import argparse
 from pathlib import Path
 import sys
 import os
+
+import torch
+from torch import profiler as torch_profiler
 
 import wandb
 from datasets import load_dataset
@@ -17,34 +18,12 @@ from transformers import (
     set_seed,
 )
 
-print("\n===== DEBUG: File Context =====")
-print("Current Working Directory:", os.getcwd())
-print("Script __file__:", __file__)
-print("sys.path:")
-for p in sys.path:
-    print("  ", p)
-
-print("\nList of files in CWD:")
-for f in os.listdir():
-    print("  ", f)
-
-print("\nList of files in 'models/' relative to CWD:")
-models_path = os.path.join(os.getcwd(), "models")
-if os.path.isdir(models_path):
-    for f in os.listdir(models_path):
-        print("  ", f)
-else:
-    print("  (models/ directory not found)")
-
 # This file exists in the 'scripts' subdirectory, go up a level to find 'models'.
 from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 from utils import summarize_parameters, format_size
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-print("PROJECT_ROOT", PROJECT_ROOT)
-
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -72,6 +51,8 @@ def main():
     # of the script can rely on a consistent set of fields.
     cfg["ffn_decompose"] = cfg.get("ffn_decompose", cfg.get("use_decomp_mlp", False))
     cfg["output_subspace"] = cfg.get("output_subspace", cfg.get("use_output_latent", False))
+    # Default max_steps for profiling; keeps runs short unless overridden
+    cfg["max_steps"] = cfg.get("max_steps", 10)
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
@@ -267,6 +248,8 @@ def main():
         
         learning_rate=cfg["learning_rate"],
         num_train_epochs=cfg["num_train_epochs"],
+        # Limit steps for profiling so execution finishes quickly
+        max_steps=cfg.get("max_steps", 10),
         
         # Evaluate every xx steps
         # Recent versions changed from 'evaluation_strategy'
@@ -304,7 +287,17 @@ def main():
     # =====================
 
     try:
-        trainer.train()
+        # Profile the training run to collect performance information.
+        # The context records all operations executed by `trainer.train`.
+        with torch_profiler.profile(
+            activities=[torch_profiler.ProfilerActivity.CPU],
+            record_shapes=True,
+        ) as prof:
+            trainer.train()
+
+        # Display a summary of the profiling results.
+        print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+
         metrics = trainer.evaluate()
         wandb.log(metrics)
     
