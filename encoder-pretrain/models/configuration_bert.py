@@ -174,6 +174,19 @@ class SubspaceBertConfig(PretrainedConfig):
         self.ffn_rank = ffn_rank if ffn_rank is not None else hidden_size
         # ------------------------------------------------
 
+        # ------------------------------------------------
+        # Modified: Print out key configuration settings so
+        # we can track how options like `num_dense_layers`
+        # are being passed around during initialization.
+        print(
+            "SubspaceBertConfig initialized with "
+            f"num_hidden_layers={self.num_hidden_layers}, "
+            f"use_mla={self.use_mla}, "
+            f"num_dense_layers={self.num_dense_layers}, "
+            f"use_decomp_mlp={self.use_decomp_mlp}"
+        )
+        # ------------------------------------------------
+
 
 class SubspaceBertOnnxConfig(OnnxConfig):
     @property
