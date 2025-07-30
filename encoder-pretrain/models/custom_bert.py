@@ -578,9 +578,9 @@ class BertIntermediateDecomp(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        latent_dim = getattr(config, "ffn_rank", None)
-        if latent_dim is None:
-            latent_dim = config.intermediate_size
+
+        assert hasattr(config, 'ffn_rank'), "Must specify rank for decomposed MLPs"
+        latent_dim = config.ffn_rank
 
         # Shared input projection then per-neuron expansion
         self.w1a = nn.Linear(config.hidden_size, latent_dim, bias=False)
@@ -617,10 +617,10 @@ class BertOutputDecomp(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        latent_dim = getattr(config, "ffn_rank", None)
-        if latent_dim is None:
-            latent_dim = config.intermediate_size
-
+        
+        assert hasattr(config, 'ffn_rank'), "Must specify rank for decomposed MLPs"
+        latent_dim = config.ffn_rank
+        
         self.w2a = nn.Linear(config.intermediate_size, latent_dim, bias=False)
         self.w2b = nn.Linear(latent_dim, config.hidden_size)
 
@@ -647,11 +647,13 @@ class BertLayer(GradientCheckpointingLayer):
             if not self.is_decoder:
                 raise ValueError(f"{self} should be used as a decoder model if cross attention is added")
             self.crossattention = BertAttention(config, position_embedding_type="absolute")
-        if getattr(config, "use_decomp_mlp", False):
+        if config.use_decomp_mlp:
             # Use decomposed feed-forward network.
+            print("      > adding decomp mlp")
             self.intermediate = BertIntermediateDecomp(config)
             self.output = BertOutputDecomp(config)
         else:
+            print("      > adding dense mlp")
             self.intermediate = BertIntermediate(config)
             self.output = BertOutput(config)
 
@@ -738,16 +740,18 @@ class BertEncoder(nn.Module):
         # correctly. This project is still in early
         # development, so simple print statements help
         # us debug the configuration flow.
-        dense_mlp_desc = (
-            "decomposed MLPs" if config.use_decomp_mlp else "dense MLPs"
-        )
+
         num_dense = getattr(config, "num_dense_layers", 0)
         num_mla = config.num_hidden_layers - num_dense
-        attn_desc = "MLA" if config.use_mla else "MHA"
+        
         print(
-            f"Initializing {num_dense} dense layers with MHA and {dense_mlp_desc}, "
-            f"and {num_mla} {attn_desc} layers with {dense_mlp_desc}"
+            f"\n==== BertEncoder ====\n"
+            f"  - dense layers: {num_dense}\n"
+            f"  - mla? {config.use_mla}\n"
+            f"  - decomps? {config.use_decomp_mlp}\n"
+            f"  Layers:\n"
         )
+
         self.layer = nn.ModuleList()
         for idx in range(config.num_hidden_layers):
             # Create a copy of the config so each layer can have
@@ -762,7 +766,7 @@ class BertEncoder(nn.Module):
                 layer_cfg.use_mla = config.use_mla
 
             print(
-                f"  Layer {idx}: use_mla={layer_cfg.use_mla}, use_decomp_mlp={layer_cfg.use_decomp_mlp}"
+                f"    > Layer {idx}: mla? {layer_cfg.use_mla} dcmp? {layer_cfg.use_decomp_mlp}"
             )
 
             self.layer.append(BertLayer(layer_cfg))
