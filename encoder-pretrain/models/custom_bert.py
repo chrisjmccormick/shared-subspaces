@@ -435,9 +435,22 @@ class BertSdpaSelfAttention(BertSelfAttention):
 
 
 class BertSelfOutput(nn.Module):
+    """
+    Self-Attention Output projection, plus dropout, layernorm, and 
+    residual.
+    """
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+
+        # -------------------------------------------------------------
+        # Modified: MLA defines its own output projection.
+        if getattr(config, "use_mla", False):
+            print("BertSelfOutput: using MLA output latent - skipping dense layer")
+            self.dense = nn.Identity()
+        # -------------------------------------------------------------
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+            
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -451,10 +464,6 @@ class BertSelfOutput(nn.Module):
 BERT_SELF_ATTENTION_CLASSES = {
     "eager": BertSelfAttention,
     "sdpa": BertSdpaSelfAttention,
-    # -------------------------------------------------
-    # Modified: Keep "mla" as an alias for older configs.
-    "mla": DeepseekV3Attention,
-    # -------------------------------------------------
 }
 
 
@@ -462,15 +471,12 @@ class BertAttention(nn.Module):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
         attn_cls = BERT_SELF_ATTENTION_CLASSES[config._attn_implementation]
+
         # -------------------------------------------------
         # Modified: Switch to MLA when requested via config.use_mla.
         if config.use_mla:
-            attn_cls = DeepseekV3Attention
-        # -------------------------------------------------
-
-        # -------------------------------------------------
-        # Modified: Support MLA when requested.
-        if attn_cls is DeepseekV3Attention:
+            
+            # Initialize a DS-V3 config object for this attention block.
             ds_config = DeepseekV3Config(
                 hidden_size=config.hidden_size,
                 intermediate_size=config.intermediate_size,
@@ -491,14 +497,22 @@ class BertAttention(nn.Module):
                 attention_dropout=config.attention_probs_dropout_prob,
                 rms_norm_eps=config.layer_norm_eps,
             )
+            
+            # Set the attention implementation directly.
             ds_config._attn_implementation = config._attn_implementation
-            self.self = attn_cls(ds_config, layer_idx=0)
+            
+            # Instantiate 
+            self.self = DeepseekV3Attention(ds_config, layer_idx=0)
             self.rotary_emb = DeepseekV3RotaryEmbedding(ds_config)
         # ---------------------------------------------------
         else:
             self.self = attn_cls(config, position_embedding_type=position_embedding_type)
             
+        # BERT's attention output projection, W^O.
+        # This also includes normalization, dropout, and residual stream, 
+        # so we'll keep it and add a flag inside.
         self.output = BertSelfOutput(config)
+            
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -559,6 +573,9 @@ class BertAttention(nn.Module):
 
 
 class BertIntermediate(nn.Module):
+    """
+    Dense MLP input neurons
+    """
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
@@ -571,6 +588,24 @@ class BertIntermediate(nn.Module):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.intermediate_act_fn(hidden_states)
         return hidden_states
+
+class BertOutput(nn.Module):
+    """
+    Dense MLP output neurons
+    """
+    def __init__(self, config):
+        super().__init__()
+        
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)        
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
 
 
 class BertIntermediateDecomp(nn.Module):
@@ -595,20 +630,6 @@ class BertIntermediateDecomp(nn.Module):
         hidden_states = self.w1a(hidden_states)
         hidden_states = self.w1b(hidden_states)
         hidden_states = self.intermediate_act_fn(hidden_states)
-        return hidden_states
-
-
-class BertOutput(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
 
