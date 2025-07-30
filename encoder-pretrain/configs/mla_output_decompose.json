@@ -3,9 +3,7 @@
   
   "notes": "Will be used as part of a sweep over FFN decomposition ranks.",
   
-  "model": {
-    "model_type":           "bert",
-	
+  "model": {	
 	"hidden_size":          256,
     "num_hidden_layers":    6,
     "intermediate_size":    1024,
