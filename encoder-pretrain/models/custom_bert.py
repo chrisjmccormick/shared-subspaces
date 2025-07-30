@@ -876,6 +876,8 @@ class SubspaceBertPreTrainedModel(PreTrainedModel):
     base_model_prefix = "bert"
     supports_gradient_checkpointing = True
     _supports_sdpa = True
+    _supports_flash_attn_2 = True      
+    _supports_attention_backend = True     
 
     def _init_weights(self, module):
         """Initialize the weights"""
@@ -1227,14 +1229,6 @@ class SubspaceBertForPreTraining(SubspaceBertPreTrainedModel):
 class SubspaceBertLMHeadModel(SubspaceBertPreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["cls.predictions.decoder.bias", "cls.predictions.decoder.weight"]
 
-    #config_class = SubspaceBertConfig
-    #load_tf_weights = load_tf_weights_in_bert
-    #base_model_prefix = "bert"
-    #supports_gradient_checkpointing = True
-    _supports_sdpa = True
-    _supports_flash_attn_2 = True      
-    _supports_attention_backend = True 
-
 
     def __init__(self, config):
         super().__init__(config)
@@ -1444,6 +1438,7 @@ class SubspaceBertForMaskedLM(SubspaceBertPreTrainedModel):
     """
 )
 class SubspaceBertForNextSentencePrediction(SubspaceBertPreTrainedModel):
+
     def __init__(self, config):
         super().__init__(config)
 
