@@ -72,6 +72,9 @@ def main():
     # of the script can rely on a consistent set of fields.
     cfg["ffn_decompose"] = cfg.get("ffn_decompose", cfg.get("use_decomp_mlp", False))
     cfg["output_subspace"] = cfg.get("output_subspace", cfg.get("use_output_latent", False))
+    # Normalize attention backend field so configs can use
+    # "attention_backend" or rely on the default of "eager".
+    cfg["attention_backend"] = cfg.get("attention_backend", "eager")
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
@@ -144,7 +147,11 @@ def main():
         qk_nope_head_dim=cfg.get("qk_nope_head_dim"),
         output_subspace=cfg.get("output_subspace", False),
         num_dense_layers=cfg.get("num_dense_layers"),
-        ffn_rank=cfg.get("ffn_rank")
+        ffn_rank=cfg.get("ffn_rank"),
+        # Pass through the selected attention backend so the
+        # model config knows whether to use eager, sdpa, or flash
+        # attention implementations.
+        attention_backend=cfg.get("attention_backend", "eager")
     )
 
     model = SubspaceBertForMaskedLM(bert_config)
