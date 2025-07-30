@@ -128,6 +128,10 @@ class SubspaceBertConfig(PretrainedConfig):
         # attention instead of MLA.
         num_dense_layers=0,
         # ------------------------------------------------
+        # Modified: Parameters for decomposed FFNs.
+        use_decomp_mlp=False,
+        ffn_rank=None,
+        # ------------------------------------------------
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -163,6 +167,11 @@ class SubspaceBertConfig(PretrainedConfig):
         # When using MLA, the first `num_dense_layers` will still use
         # standard MHA. This mirrors practices from some MoE models.
         self.num_dense_layers = num_dense_layers
+        # ------------------------------------------------
+        # Modified: Store decomposed FFN settings.
+        self.use_decomp_mlp = use_decomp_mlp
+        # Allow legacy name `ffn_rank` for the latent dimension.
+        self.ffn_rank = ffn_rank if ffn_rank is not None else hidden_size
         # ------------------------------------------------
 
 

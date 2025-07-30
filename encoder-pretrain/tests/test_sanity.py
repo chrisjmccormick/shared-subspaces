@@ -188,6 +188,28 @@ def test_mla_with_dense_prefix_layers():
     )
 
 
+def test_decomposed_ffn():
+    """Ensure decomposed FFN modules can replace dense ones."""
+    config = SubspaceBertConfig(
+        vocab_size=100,
+        hidden_size=32,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=64,
+        use_decomp_mlp=True,
+        ffn_rank=16,
+    )
+    config._attn_implementation = "eager"
+    model = SubspaceBertForMaskedLM(config)
+
+    assert hasattr(model.bert.encoder.layer[0], "intermediate")
+    assert model.bert.encoder.layer[0].intermediate.__class__.__name__ == "BertIntermediateDecomp"
+
+    input_ids = torch.randint(0, config.vocab_size, (2, 8))
+    outputs = model(input_ids=input_ids)
+    assert outputs.logits.shape == (2, 8, config.vocab_size)
+
+
 if __name__ == "__main__":
     print("Testing standard BERT forward")
     test_custom_bert_forward()
