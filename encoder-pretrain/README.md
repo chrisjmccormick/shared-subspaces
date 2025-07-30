@@ -28,3 +28,14 @@ Available configs:
 - `mla_output_decompose.json` – MLA, output subspace and decomposed MLP.
 
 Training metrics are logged to wandb under the project `encoder-pretrain`.
+
+### Dataloader Settings
+
+Two optional fields in the `pre_train` section control how data loading is
+performed:
+
+- `num_workers` – number of worker processes used by the PyTorch dataloader.
+- `pin_memory` – whether to pin dataloader memory for faster host-to-device
+  transfers.
+
+If omitted, `num_workers` defaults to `0` and `pin_memory` defaults to `false`.

@@ -41,15 +41,30 @@ def parse_args():
 
 from torch.utils.data import DataLoader
 
+
 class CustomTrainer(Trainer):
+    """Trainer with configurable DataLoader settings."""
+
+    def __init__(self, *args, config, **kwargs):
+        # Store the full experiment config so we can read DataLoader options.
+        super().__init__(*args, **kwargs)
+        self.config = config
+
+    def _dataloader_kwargs(self):
+        """Return kwargs controlling dataloader parallelism and memory usage."""
+        pre_cfg = self.config["pre_train"]
+        return {
+            "num_workers": pre_cfg.get("num_workers", 0),
+            "pin_memory": pre_cfg.get("pin_memory", False),
+        }
+
     def get_train_dataloader(self):
         return DataLoader(
             self.train_dataset,
             batch_size=self.args.train_batch_size,
             shuffle=True,
             collate_fn=self.data_collator,
-            num_workers=4,
-            pin_memory=True,
+            **self._dataloader_kwargs(),
         )
 
     def get_eval_dataloader(self, eval_dataset=None):
@@ -58,8 +73,7 @@ class CustomTrainer(Trainer):
             eval_dataset,
             batch_size=self.args.eval_batch_size,
             collate_fn=self.data_collator,
-            num_workers=4,
-            pin_memory=True,
+            **self._dataloader_kwargs(),
         )
 
 
@@ -304,7 +318,7 @@ def main():
         eval_dataset=tokenized["validation"],
         processing_class=tokenizer, # New argument name, allows for other modalities.
         data_collator=data_collator,
-        #config=config,
+        config=config,
     )
 
     # =====================
