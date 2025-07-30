@@ -17,8 +17,27 @@ from transformers import (
     set_seed,
 )
 
+print("\n===== DEBUG: File Context =====")
+print("Current Working Directory:", os.getcwd())
+print("Script __file__:", __file__)
+print("sys.path:")
+for p in sys.path:
+    print("  ", p)
+
+print("\nList of files in CWD:")
+for f in os.listdir():
+    print("  ", f)
+
+print("\nList of files in 'models/' relative to CWD:")
+models_path = os.path.join(os.getcwd(), "models")
+if os.path.isdir(models_path):
+    for f in os.listdir(models_path):
+        print("  ", f)
+else:
+    print("  (models/ directory not found)")
+
 # This file exists in the 'scripts' subdirectory, go up a level to find 'models'.
-from ...models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
+from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
