@@ -677,7 +677,24 @@ class BertEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
+        # -------------------------------------------------
+        # Modified: Allow using standard MHA for the first
+        # `num_dense_layers` even when MLA is enabled.
+        self.layer = nn.ModuleList()
+        for idx in range(config.num_hidden_layers):
+            # Create a copy of the config so each layer can have
+            # its own attention setting.
+            layer_cfg = SubspaceBertConfig(**config.to_dict())
+            layer_cfg._attn_implementation = config._attn_implementation
+
+            # Disable MLA for the initial dense layers.
+            if getattr(config, "use_mla", False) and idx < getattr(config, "num_dense_layers", 0):
+                layer_cfg.use_mla = False
+            else:
+                layer_cfg.use_mla = config.use_mla
+
+            self.layer.append(BertLayer(layer_cfg))
+        # -------------------------------------------------
         self.gradient_checkpointing = False
 
     def forward(

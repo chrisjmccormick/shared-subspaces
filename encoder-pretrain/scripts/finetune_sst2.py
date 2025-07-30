@@ -16,7 +16,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 
 #from transformers import BertForSequenceClassification
 
-from models.custom_bert import SubspaceBertForSequenceClassification
+from models.custom_bert import SubspaceBertForSequenceClassification, SubspaceBertConfig
 
 # Filter out some unhelpful warnings cluttering the output.
 import warnings
@@ -72,11 +72,14 @@ def main():
         "max_length": 128,
     }
 
-    # TODO... We need a way to pass the configuration string from the 
-    # checkpoint to this script.
+    # Retrieve the run name used during pre-training so we can reuse it here.
+    model_cfg = SubspaceBertConfig.from_pretrained(model_path)
+    run_name = getattr(model_cfg, "run_name", "pretrain")
+    config["run_name"] = run_name
+
     wandb.init(
-        project="encoder-pretrain", 
-        name="finetune-cola", 
+        project="encoder-pretrain",
+        name=f"{run_name}-sst2",
         config=config
     )
 
