@@ -75,19 +75,17 @@ def main():
     with open(args.config) as f:
         cfg = json.load(f)
 
-    model_path = cfg["output_dir"]
+    # Required sections in the new config structure.
+    assert "pre_train" in cfg and "fine_tune" in cfg, "Config missing required sections"
+
+    model_path = cfg["pre_train"]["output_dir"]
 
     # Confirm directory exists
     assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
 
-    config = {
-        "model_path": model_path,
-        "task": "sst2",
-        "batch_size": 16,
-        "lr": 2e-5,
-        "epochs": 3,
-        "max_length": 128,
-    }
+    # Fine-tuning hyperparameters are now provided under "fine_tune".
+    config = cfg["fine_tune"].copy()
+    config["model_path"] = model_path
 
     # Retrieve the run name used during pre-training so we can reuse it here.
     model_cfg = SubspaceBertConfig.from_pretrained(model_path)
@@ -109,8 +107,8 @@ def main():
     
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     
-    #dataset = load_dataset("glue", "cola")
-    dataset = load_dataset("glue", "sst2")
+    # Load the GLUE task specified in the config.
+    dataset = load_dataset("glue", config["task"])
 
 
     dataset = dataset.map(lambda ex: tokenize_fn(ex, tokenizer, config["max_length"]), batched=True)
