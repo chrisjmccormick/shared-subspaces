@@ -132,6 +132,12 @@ class SubspaceBertConfig(PretrainedConfig):
         ffn_decompose=False,
         ffn_rank=None,
         # ------------------------------------------------
+        # Modified: Flag to select attention backend.  This
+        # replaces use of `config._attn_implementation` so
+        # we can easily toggle between eager, sdpa, or flash
+        # attention without relying on HF's property.
+        attention_backend="eager",
+        # ------------------------------------------------
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -174,12 +180,25 @@ class SubspaceBertConfig(PretrainedConfig):
         # ------------------------------------------------
 
         # ------------------------------------------------
+        # Modified: Set the attention backend and map it to
+        # HuggingFace's internal `_attn_implementation`.
+        self.attention_backend = attention_backend
+        if attention_backend == "flash":
+            self._attn_implementation = "flash_attention_2"
+        elif attention_backend == "sdpa":
+            self._attn_implementation = "sdpa"
+        else:
+            self._attn_implementation = "eager"
+        # ------------------------------------------------
+
+        # ------------------------------------------------
         # Modified: Print out key configuration settings so
         # we can track how options like `num_dense_layers`
         # are being passed around during initialization.
         print(
              f"  > SubspaceBertConfig.init - {self.num_hidden_layers}l - mla{self.use_mla} - ndense{self.num_dense_layers} - dcmp{self.ffn_decompose}\n"
         )
+        print(f"    - attention backend: {self.attention_backend}\n")
         # ------------------------------------------------
 
 
