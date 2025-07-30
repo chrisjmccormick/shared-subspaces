@@ -7,7 +7,6 @@ import os
 import torch
 from torch import profiler as torch_profiler
 
-import wandb
 from datasets import load_dataset
 import transformers
 from transformers import (
@@ -59,14 +58,9 @@ def main():
     # Set random seed for reproducibility
     set_seed(cfg.get("seed", 42))
 
-    # Setup Weights & Biases
-    # Use offline mode if the API key isn't in the environment variables.
-    if "WANDB_MODE" not in os.environ:
-        os.environ["WANDB_MODE"] = "offline"
-    
-    wandb_api_key = os.environ.get("WANDB_API_KEY")
-    if wandb_api_key:
-        wandb.login(key=wandb_api_key)
+
+    # WandB was used originally for experiment tracking. This profiler script
+    # should run without external logging, so all WandB setup is removed.
 
     
     # Use the standard BERT tokenizer.
@@ -228,11 +222,7 @@ def main():
 
 
 
-    wandb.init(
-        project="encoder-pretrain", 
-        name=run_name,
-        config=cfg
-    )
+    # All experiment tracking is handled locally; disable WandB initialization.
 
     # ===============================
     #       Training Arguments
@@ -259,10 +249,11 @@ def main():
         logging_steps=50,
         
         # Checkpoint saving
-        save_steps=500,
-        save_total_limit=2,           # Optional: keeps last 2 checkpoints
-        save_strategy="steps",
-        report_to=["wandb"],
+        # Disable checkpoint saving and external reporting for a clean profiler
+        # run. We still set an output directory so HF doesn't complain, but no
+        # checkpoints will actually be written.
+        save_strategy="no",
+        report_to=[],
         run_name=run_name,
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
     )
@@ -287,24 +278,35 @@ def main():
     # =====================
 
     try:
+        # Reset GPU memory trackers so reported numbers only include this run.
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+
         # Profile the training run to collect performance information.
         # The context records all operations executed by `trainer.train`.
         with torch_profiler.profile(
             activities=[torch_profiler.ProfilerActivity.CPU, torch_profiler.ProfilerActivity.GPU],
             record_shapes=True,
+            profile_memory=True,  # Capture GPU memory usage
         ) as prof:
             trainer.train()
 
         # Display a summary of the profiling results.
         print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
         print(prof.key_averages().table(sort_by="gpu_time_total", row_limit=10))
+        print(prof.key_averages().table(sort_by="self_cuda_memory_usage", row_limit=10))
 
         metrics = trainer.evaluate()
-        wandb.log(metrics)
+        print("Evaluation metrics:", metrics)
     
+        # Report peak GPU memory usage for quick reference.
+        if torch.cuda.is_available():
+            max_mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
+            print(f"Peak GPU memory allocated: {max_mem:.2f} GB")
+
     finally:
-        wandb.finish()
-        trainer.save_model(cfg["output_dir"])
+        # Do not save checkpoints when profiling.
+        pass
     
 
 if __name__ == "__main__":
