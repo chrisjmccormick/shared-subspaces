@@ -219,7 +219,7 @@ def main():
 
 
     wandb.init(
-        project="encoder-pretrain",
+        project="encoder-pretrain-profiler",
         name=run_name,
         config=config
     )
@@ -287,7 +287,7 @@ def main():
 
         # Display a summary of the profiling results.
         print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
-        print(prof.key_averages().table(sort_by="gpu_time_total", row_limit=10))
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
         metrics = trainer.evaluate()
         wandb.log(metrics)
