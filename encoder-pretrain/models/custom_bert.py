@@ -733,6 +733,21 @@ class BertEncoder(nn.Module):
         # -------------------------------------------------
         # Modified: Allow using standard MHA for the first
         # `num_dense_layers` even when MLA is enabled.
+        # Also print out the layer setup so we can easily
+        # verify that the configuration is being applied
+        # correctly. This project is still in early
+        # development, so simple print statements help
+        # us debug the configuration flow.
+        dense_mlp_desc = (
+            "decomposed MLPs" if config.use_decomp_mlp else "dense MLPs"
+        )
+        num_dense = getattr(config, "num_dense_layers", 0)
+        num_mla = config.num_hidden_layers - num_dense
+        attn_desc = "MLA" if config.use_mla else "MHA"
+        print(
+            f"Initializing {num_dense} dense layers with MHA and {dense_mlp_desc}, "
+            f"and {num_mla} {attn_desc} layers with {dense_mlp_desc}"
+        )
         self.layer = nn.ModuleList()
         for idx in range(config.num_hidden_layers):
             # Create a copy of the config so each layer can have
@@ -745,6 +760,10 @@ class BertEncoder(nn.Module):
                 layer_cfg.use_mla = False
             else:
                 layer_cfg.use_mla = config.use_mla
+
+            print(
+                f"  Layer {idx}: use_mla={layer_cfg.use_mla}, use_decomp_mlp={layer_cfg.use_decomp_mlp}"
+            )
 
             self.layer.append(BertLayer(layer_cfg))
         # -------------------------------------------------
