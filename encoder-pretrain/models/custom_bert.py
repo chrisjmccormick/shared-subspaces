@@ -573,6 +573,31 @@ class BertIntermediate(nn.Module):
         return hidden_states
 
 
+class BertIntermediateDecomp(nn.Module):
+    """Decomposed variant of the intermediate feed-forward projection."""
+
+    def __init__(self, config):
+        super().__init__()
+        latent_dim = getattr(config, "ffn_rank", None)
+        if latent_dim is None:
+            latent_dim = config.intermediate_size
+
+        # Shared input projection then per-neuron expansion
+        self.w1a = nn.Linear(config.hidden_size, latent_dim, bias=False)
+        self.w1b = nn.Linear(latent_dim, config.intermediate_size)
+
+        if isinstance(config.hidden_act, str):
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.intermediate_act_fn = config.hidden_act
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.w1a(hidden_states)
+        hidden_states = self.w1b(hidden_states)
+        hidden_states = self.intermediate_act_fn(hidden_states)
+        return hidden_states
+
+
 class BertOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -582,6 +607,29 @@ class BertOutput(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
+
+class BertOutputDecomp(nn.Module):
+    """Decomposed variant of the FFN output projection."""
+
+    def __init__(self, config):
+        super().__init__()
+        latent_dim = getattr(config, "ffn_rank", None)
+        if latent_dim is None:
+            latent_dim = config.intermediate_size
+
+        self.w2a = nn.Linear(config.intermediate_size, latent_dim, bias=False)
+        self.w2b = nn.Linear(latent_dim, config.hidden_size)
+
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.w2a(hidden_states)
+        hidden_states = self.w2b(hidden_states)
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
@@ -599,8 +647,13 @@ class BertLayer(GradientCheckpointingLayer):
             if not self.is_decoder:
                 raise ValueError(f"{self} should be used as a decoder model if cross attention is added")
             self.crossattention = BertAttention(config, position_embedding_type="absolute")
-        self.intermediate = BertIntermediate(config)
-        self.output = BertOutput(config)
+        if getattr(config, "use_decomp_mlp", False):
+            # Use decomposed feed-forward network.
+            self.intermediate = BertIntermediateDecomp(config)
+            self.output = BertOutputDecomp(config)
+        else:
+            self.intermediate = BertIntermediate(config)
+            self.output = BertOutput(config)
 
     def forward(
         self,
