@@ -121,7 +121,7 @@ class SubspaceBertConfig(PretrainedConfig):
         qk_rope_head_dim=None,
         v_head_dim=None,
         qk_nope_head_dim=0,
-        add_output_latent=False,
+        output_subspace=False,
         o_lora_rank=None,
         # ------------------------------------------------
         # Modified: Number of initial layers that use dense
@@ -129,7 +129,7 @@ class SubspaceBertConfig(PretrainedConfig):
         num_dense_layers=0,
         # ------------------------------------------------
         # Modified: Parameters for decomposed FFNs.
-        use_decomp_mlp=False,
+        ffn_decompose=False,
         ffn_rank=None,
         # ------------------------------------------------
         **kwargs,
@@ -162,14 +162,18 @@ class SubspaceBertConfig(PretrainedConfig):
         )
         self.v_head_dim = v_head_dim if v_head_dim is not None else hidden_size // num_attention_heads
         self.qk_nope_head_dim = qk_nope_head_dim
-        self.add_output_latent = add_output_latent
+        self.output_subspace = output_subspace
+        # Maintain backwards compatibility
+        self.add_output_latent = output_subspace
         self.o_lora_rank = o_lora_rank if o_lora_rank is not None else hidden_size
         # When using MLA, the first `num_dense_layers` will still use
         # standard MHA. This mirrors practices from some MoE models.
         self.num_dense_layers = num_dense_layers
         # ------------------------------------------------
         # Modified: Store decomposed FFN settings.
-        self.use_decomp_mlp = use_decomp_mlp
+        self.ffn_decompose = ffn_decompose
+        # Backwards compatibility
+        self.use_decomp_mlp = ffn_decompose
         # Allow legacy name `ffn_rank` for the latent dimension.
         self.ffn_rank = ffn_rank if ffn_rank is not None else hidden_size
         # ------------------------------------------------
@@ -183,7 +187,7 @@ class SubspaceBertConfig(PretrainedConfig):
             f"  num_hidden_layers={self.num_hidden_layers}\n"
             f"            use_mla={self.use_mla}\n"
             f"   num_dense_layers={self.num_dense_layers}\n"
-            f"     use_decomp_mlp={self.use_decomp_mlp}\n"
+            f"   ffn_decompose={self.ffn_decompose}\n"
         )
         # ------------------------------------------------
 

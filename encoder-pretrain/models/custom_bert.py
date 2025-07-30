@@ -490,7 +490,7 @@ class BertAttention(nn.Module):
                 v_head_dim=config.v_head_dim,
                 qk_nope_head_dim=config.qk_nope_head_dim,
 
-                use_output_latent=config.add_output_latent,
+                output_subspace=config.output_subspace,
                 o_lora_rank=config.o_lora_rank,
 
                 max_position_embeddings=config.max_position_embeddings,
@@ -669,7 +669,7 @@ class BertLayer(GradientCheckpointingLayer):
             if not self.is_decoder:
                 raise ValueError(f"{self} should be used as a decoder model if cross attention is added")
             self.crossattention = BertAttention(config, position_embedding_type="absolute")
-        if config.use_decomp_mlp:
+        if config.ffn_decompose:
             # Use decomposed feed-forward network.
             print("      > adding decomp mlp")
             self.intermediate = BertIntermediateDecomp(config)
@@ -773,7 +773,7 @@ class BertEncoder(nn.Module):
             f"\n==== BertEncoder ====\n"
             f"  - dense layers: {num_dense}\n"
             f"  - mla? {config.use_mla}\n"
-            f"  - decomps? {config.use_decomp_mlp}\n"
+            f"  - decomps? {config.ffn_decompose}\n"
             f"  Layers:\n"
         )
 
@@ -791,7 +791,7 @@ class BertEncoder(nn.Module):
                 layer_cfg.use_mla = config.use_mla
 
             print(
-                f"    > Layer {idx}: mla? {layer_cfg.use_mla} dcmp? {layer_cfg.use_decomp_mlp}"
+                f"    > Layer {idx}: mla? {layer_cfg.use_mla} dcmp? {layer_cfg.ffn_decompose}"
             )
 
             self.layer.append(BertLayer(layer_cfg))
@@ -875,6 +875,9 @@ class BertEncoder(nn.Module):
 class BertPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
+        # Standard BERT FFN output projects from intermediate_size back to
+        # hidden_size. The previous version incorrectly used hidden_size for
+        # both dimensions, which caused shape mismatches in tests.
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.activation = nn.Tanh()
 

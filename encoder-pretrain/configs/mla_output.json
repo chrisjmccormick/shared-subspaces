@@ -25,7 +25,7 @@
   "v_head_dim": 32,
   "qk_nope_head_dim": 32,
 
-  "use_output_latent": true,
+  "output_subspace": true,
   
   "fp16": true,
   
@@ -44,7 +44,6 @@
   "output_dir": "checkpoints/mla_w_output",
   
   "use_mla": true,
-  
-  "output_subspace": false,
+
   "ffn_decompose": false
 }
