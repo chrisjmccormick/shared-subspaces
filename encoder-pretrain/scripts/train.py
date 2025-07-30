@@ -201,6 +201,11 @@ def main():
     if cfg.get("use_mla"):
         dense_str = str(cfg.get("num_dense_layers")) + "mha + "
 
+        if cfg.get("output_subspace"):
+            o_str = "." + str(cfg.get("o_lora_rank"))
+        else:
+            o_str = ""
+
         # If no output subspace is used, the dimension will show as -1.
         attn_str = (
             dense_str
@@ -208,8 +213,7 @@ def main():
             + str(cfg.get("q_lora_rank"))
             + "."
             + str(cfg.get("kv_lora_rank"))
-            + "."
-            + str(cfg.get("o_lora_rank"))
+            + o_str
         )
     else:
         attn_str = "mha"
