@@ -1,4 +1,12 @@
+"""Simple script to load a pretrained checkpoint and run a single masked
+token prediction. Previously the checkpoint directory was hardcoded. This
+update allows passing one of the JSON config files on the command line in
+order to locate the correct `output_dir`.
+"""
+
 from transformers import AutoTokenizer
+import argparse
+import json
 import torch
 from pathlib import Path
 import os
@@ -7,12 +15,25 @@ import os
 from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 from utils import summarize_parameters, format_size
 
-# Load model from your training checkpoint directory
+
+def parse_args():
+    """Parse command line to get path to a config JSON file."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True, help="Path to JSON config")
+    return parser.parse_args()
+
 
 # Use the tokenizer you originally trained with
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-model_path = Path("../encoder-pretrain/checkpoints/baseline").resolve()
+args = parse_args()
+
+with open(args.config) as f:
+    cfg = json.load(f)
+
+model_path = Path(cfg["output_dir"]).resolve()
+
+print("Passing repo id as:", str(model_path))
 
 # Confirm directory exists
 assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
@@ -20,9 +41,6 @@ assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
 # Retrieve the run name used during pre-training so we can reuse it here.
 model_cfg = SubspaceBertConfig.from_pretrained(model_path)
 print("Run name:", getattr(model_cfg, "run_name", "pretrain"))
-
-
-print("Passing repo id as:", str(model_path))
 
 # Load the checkpoint
 model = SubspaceBertForMaskedLM.from_pretrained(
