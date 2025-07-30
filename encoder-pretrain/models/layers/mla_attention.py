@@ -243,15 +243,17 @@ class DeepseekV3Attention(nn.Module):
         self.kv_lora_rank = config.kv_lora_rank
         self.v_head_dim = config.v_head_dim
         self.qk_nope_head_dim = config.qk_nope_head_dim
-        self.qk_head_dim = config.qk_head_dim
 
         # Additional attributes used by our MLA variant
         self.hidden_size = config.hidden_size
         self.o_lora_rank = getattr(config, "o_lora_rank", config.hidden_size)
 
         self.is_causal = True
+        
+        # Even without projections, we will still use the additional RoPE heads.
         if self.q_lora_rank is None:
-            self.q_proj = nn.Linear(config.hidden_size, self.num_heads * self.qk_head_dim, bias=False)
+            self.q_proj = nn.Linear(config.hidden_size, self.num_heads * self.qk_nope_head_dim, bias=False)
+        
         else:
             self.q_a_proj = nn.Linear(config.hidden_size, config.q_lora_rank, bias=config.attention_bias)
             self.q_a_layernorm = DeepseekV3RMSNorm(config.q_lora_rank)
