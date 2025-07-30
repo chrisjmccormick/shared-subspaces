@@ -445,7 +445,7 @@ class BertSelfOutput(nn.Module):
         # -------------------------------------------------------------
         # Modified: MLA defines its own output projection.
         if getattr(config, "use_mla", False):
-            print("BertSelfOutput: using MLA output latent - skipping dense layer")
+            #print("BertSelfOutput: using MLA output latent - skipping dense layer")
             self.dense = nn.Identity()
         # -------------------------------------------------------------
         else:
