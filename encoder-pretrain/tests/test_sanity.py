@@ -173,7 +173,7 @@ def test_mla_with_dense_prefix_layers():
         num_attention_heads=4,
         intermediate_size=64,
         use_mla=True,
-        num_dense_layers=3,
+        num_dense_layers=2,
     )
     config._attn_implementation = "eager"
     model = SubspaceBertForMaskedLM(config)
@@ -184,7 +184,7 @@ def test_mla_with_dense_prefix_layers():
     )
     # Subsequent layers should use MLA
     assert isinstance(
-        model.bert.encoder.layer[1].attention.self, DeepseekV3Attention
+        model.bert.encoder.layer[2].attention.self, DeepseekV3Attention
     )
 
 
