@@ -568,6 +568,7 @@ class BertAttention(nn.Module):
                 output_attentions,
             )
         attention_output = self.output(self_outputs[0], hidden_states)
+        print("  BertAttention.forward: attention_output.shape", attention_output.shape)
         outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
         return outputs
 
@@ -706,6 +707,7 @@ class BertLayer(GradientCheckpointingLayer):
         else:
             outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
 
+ 
         cross_attn_present_key_value = None
         if self.is_decoder and encoder_hidden_states is not None:
             if not hasattr(self, "crossattention"):
@@ -731,6 +733,8 @@ class BertLayer(GradientCheckpointingLayer):
             # add cross-attn cache to positions 3,4 of present_key_value tuple
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
+
+        print("  BertLayer.forward: attention_output.shape", attention_output.shape)
 
         layer_output = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, attention_output
