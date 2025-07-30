@@ -176,7 +176,13 @@ class DeepseekV3Config(PretrainedConfig):
         use_output_latent=None,
         o_lora_rank=1536,
         # ------------------------------------------------
-        
+
+        # ------------------------------------------------
+        # Modified: Flag to select attention backend for this
+        # attention implementation.
+        attention_backend="eager",
+        # ------------------------------------------------
+
         n_group=8,
         topk_group=4,
         num_experts_per_tok=8,
@@ -267,6 +273,26 @@ class DeepseekV3Config(PretrainedConfig):
             tie_word_embeddings=tie_word_embeddings,
             **kwargs,
         )
+
+        # ------------------------------------------------
+        # Modified: set `_attn_implementation` according to
+        # the selected attention backend.  This must be done
+        # after calling `super().__init__` because the base
+        # class may overwrite the attribute.
+        self.attention_backend = attention_backend
+        if attention_backend == "flash":
+            self._attn_implementation = "flash_attention_2"
+        elif attention_backend == "sdpa":
+            self._attn_implementation = "sdpa"
+        else:
+            self._attn_implementation = "eager"
+        # ------------------------------------------------
+
+        # ------------------------------------------------
+        # Modified: print the selected attention backend for
+        # easier debugging of configuration flow.
+        print(f"  > DeepseekV3Config.init - attn backend: {self.attention_backend}\n")
+        # ------------------------------------------------
 
 
 __all__ = ["DeepseekV3Config"]

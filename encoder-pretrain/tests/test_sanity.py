@@ -22,9 +22,8 @@ def test_custom_bert_forward():
         num_hidden_layers=2,
         num_attention_heads=4,
         intermediate_size=64,
+    attention_backend="eager",
     )
-    # Use standard attention implementation
-    config._attn_implementation = "eager"
     model = SubspaceBertForMaskedLM(config)
     # generate random input ids (batch_size=2, seq_len=8)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
@@ -47,8 +46,8 @@ def test_deepseek_attention_forward():
         max_position_embeddings=16,
         attention_dropout=0.0,
         rms_norm_eps=1e-6,
+    attention_backend="eager",
     )
-    ds_config._attn_implementation = "eager"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
     rotary = DeepseekV3RotaryEmbedding(ds_config)
@@ -81,8 +80,8 @@ def test_deepseek_attention_with_output_latent():
         rms_norm_eps=1e-6,
         output_subspace=True,
         o_lora_rank=32,
+        attention_backend="eager",
     )
-    ds_config._attn_implementation = "eager"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
     assert hasattr(attention, "o_a_proj")
@@ -115,8 +114,8 @@ def test_deepseek_attention_flash():
         max_position_embeddings=16,
         attention_dropout=0.0,
         rms_norm_eps=1e-6,
+    attention_backend="flash",
     )
-    ds_config._attn_implementation = "flash_attention_2"
     attention = DeepseekV3Attention(ds_config, layer_idx=0)
 
     rotary = DeepseekV3RotaryEmbedding(ds_config)
@@ -137,8 +136,8 @@ def test_custom_bert_with_mla():
         num_hidden_layers=2,
         num_attention_heads=4,
         intermediate_size=64,
+        attention_backend="eager",
     )
-    config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
     config.output_subspace = False
     model = SubspaceBertForMaskedLM(config)
@@ -154,8 +153,8 @@ def test_custom_bert_with_mla_output_latent():
         num_hidden_layers=2,
         num_attention_heads=4,
         intermediate_size=64,
+        attention_backend="eager",
     )
-    config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
     config.output_subspace = True
     model = SubspaceBertForMaskedLM(config)
@@ -174,8 +173,8 @@ def test_mla_with_dense_prefix_layers():
         intermediate_size=64,
         use_mla=True,
         num_dense_layers=2,
+        attention_backend="eager",
     )
-    config._attn_implementation = "eager"
     model = SubspaceBertForMaskedLM(config)
 
     # First layer should use standard attention
@@ -198,9 +197,9 @@ def test_decomposed_ffn():
         intermediate_size=64,
         ffn_decompose=True,
         ffn_rank=16,
-        num_dense_layers=2
+        num_dense_layers=2,
+        attention_backend="eager",
     )
-    config._attn_implementation = "eager"
     model = SubspaceBertForMaskedLM(config)
 
     # TODO - Confirm that the first two layers are still dense, e.g.
