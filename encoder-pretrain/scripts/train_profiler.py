@@ -147,8 +147,8 @@ def main():
     print(f"Total elements: {config['stats']['total_elements']}\n")
 
     # Print out final config for quick verification
-    for k, v in config["model"].items():
-        print(f"{k:>25}: {v:>10}")
+    #for k, v in config["model"].items():
+    #    print(f"{k:>25}: {v:>10}")
 
     print("=============================\n")
 
