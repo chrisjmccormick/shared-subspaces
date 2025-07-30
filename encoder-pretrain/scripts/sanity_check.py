@@ -12,7 +12,7 @@ from utils import summarize_parameters, format_size
 # Use the tokenizer you originally trained with
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-model_path = Path("../encoder-pretrain/checkpoints/mla_w_output").resolve()
+model_path = Path("../encoder-pretrain/checkpoints/baseline").resolve()
 
 # Confirm directory exists
 assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
