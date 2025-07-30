@@ -24,7 +24,7 @@ print("Run name:", getattr(model_cfg, "run_name", "pretrain"))
 print("Passing repo id as:", str(model_path))
 
 # Load the checkpoint
-model = .from_pretrained(
+model = SubspaceBertForMaskedLM.from_pretrained(
     str(model_path),
     local_files_only=True,
     trust_remote_code=True,  # Usually safe for local loads
