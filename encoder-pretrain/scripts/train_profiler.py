@@ -49,8 +49,8 @@ class CustomTrainer(Trainer):
             batch_size=self.args.train_batch_size,
             shuffle=True,
             collate_fn=self.data_collator,
-            num_workers=config["pre_train"].get("num_workers", 4),
-            pin_memory=config["pre_train"].get("pin_memory", True),
+            num_workers=4,
+            pin_memory=True,
         )
 
     def get_eval_dataloader(self, eval_dataset=None):
@@ -59,8 +59,8 @@ class CustomTrainer(Trainer):
             eval_dataset,
             batch_size=self.args.eval_batch_size,
             collate_fn=self.data_collator,
-            num_workers=config["pre_train"].get("num_workers", 4),
-            pin_memory=config["pre_train"].get("pin_memory", True),
+            num_workers=4,
+            pin_memory=True,
         )
 
 
@@ -303,6 +303,7 @@ def main():
         eval_dataset=tokenized["validation"],
         processing_class=tokenizer, # New argument name, allows for other modalities.
         data_collator=data_collator,
+        #config=config,
     )
 
     # =====================
