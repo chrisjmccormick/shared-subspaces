@@ -254,8 +254,9 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 # 5. Conventions
 ----------------
 
-- We are working off of code straight from the huggingface transformers repository, so I want to make it very clear wherever we make changes.
-    - Not necessary, though, for files we've created from scratch, like the train and test scripts.
+- We are working off of code straight from the huggingface transformers repository, so I want to make it very clear wherever we make changes in order to be able to easily identify the parts that we are working on.
+    - It is not the intention, though, to commit this back into the transformers repo. This is just experimental code. We're trying to maintain compatibility with huggingface tooling, that's all.
+
 - Always comment your code to explain the reason for your changes.
 
 - It's very difficult to get the configuration code correct because of how many layers of parameter passing go on with these classes, so let's instrument the configuration code heavily for now with simple print statements to make it easy for us to confirm that the architecture is being built as intended. 

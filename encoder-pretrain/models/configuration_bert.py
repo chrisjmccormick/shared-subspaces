@@ -179,11 +179,11 @@ class SubspaceBertConfig(PretrainedConfig):
         # we can track how options like `num_dense_layers`
         # are being passed around during initialization.
         print(
-            "SubspaceBertConfig initialized with "
-            f"num_hidden_layers={self.num_hidden_layers}, "
-            f"use_mla={self.use_mla}, "
-            f"num_dense_layers={self.num_dense_layers}, "
-            f"use_decomp_mlp={self.use_decomp_mlp}"
+            "SubspaceBertConfig initialized with \n"
+            f"  num_hidden_layers={self.num_hidden_layers}\n"
+            f"            use_mla={self.use_mla}\n"
+            f"   num_dense_layers={self.num_dense_layers}\n"
+            f"     use_decomp_mlp={self.use_decomp_mlp}\n"
         )
         # ------------------------------------------------
 
