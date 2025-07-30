@@ -27,9 +27,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-
-# Temp - Using base class for the moment.
-#from models.custom_bert import CustomBertForMaskedLM
+# Disable tokenizer parallelism since we're using num_workers > 0.
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def parse_args():
@@ -296,6 +295,8 @@ def main():
         data_collator=data_collator,
     )
     """
+
+    
     trainer = CustomTrainer(
         model=model,
         args=training_args,
