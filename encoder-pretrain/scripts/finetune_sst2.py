@@ -78,7 +78,7 @@ def main():
     config["run_name"] = run_name
 
     wandb.init(
-        project="encoder-pretrain",
+        project="encoder-pretrain-sst2",
         name=f"{run_name}-sst2",
         config=config
     )
