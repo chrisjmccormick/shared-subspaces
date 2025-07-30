@@ -201,4 +201,6 @@ if __name__ == "__main__":
     test_custom_bert_with_mla()
     print("Testing BERT with MLA and output latent")
     test_custom_bert_with_mla_output_latent()
+    print("Testing with mixed MHA and MLA layers")
+    test_mla_with_dense_prefix_layers()
 
