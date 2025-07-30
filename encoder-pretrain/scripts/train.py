@@ -65,13 +65,23 @@ def parse_args():
 def main():
     args = parse_args()
     
+    # Load the config file.
+    
     with open(args.config) as f:
-        cfg = json.load(f)
+        config = json.load(f)
+
+    # Strict key check on the model configuration.
+    valid_keys = SubspaceBertConfig.__init__.__code__.co_varnames
+    valid_keys = set(valid_keys) - {"self", "kwargs"}
+    extra_keys = set(config["model"]) - valid_keys
+    if extra_keys:
+        raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
+
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
     # Set random seed for reproducibility
-    set_seed(cfg.get("seed", 42))
+    set_seed(config['pre_train'].get("seed", 42))
 
     # Setup Weights & Biases
     # Use offline mode if the API key isn't in the environment variables.
@@ -81,16 +91,15 @@ def main():
     wandb_api_key = os.environ.get("WANDB_API_KEY")
     if wandb_api_key:
         wandb.login(key=wandb_api_key)
-
     
     # Use the standard BERT tokenizer.
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    cfg["vocab_size"] = tokenizer.vocab_size
     
+    assert config['model']["vocab_size"] == tokenizer.vocab_size    
     
     dataset = load_dataset(
-        cfg["dataset_name"], 
-        cfg["dataset_config"]
+        config['pre_train']["dataset_name"], 
+        config['pre_train']["dataset_config"]
     )
     
 
@@ -98,7 +107,7 @@ def main():
         return tokenizer(
             examples["text"], 
             truncation=True, 
-            max_length=cfg["max_seq_length"]
+            max_length=config['pre_train']["max_seq_length"]
         )
 
     tokenized = dataset.map(
@@ -114,39 +123,38 @@ def main():
     # - Returns input_ids, labels, and attention_mask for MLM training
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mlm_probability=cfg["mlm_probability"] # Default is 15%
+        mlm_probability=config['pre_train']["mlm_probability"] # Default is 15%
     )
 
-    with open(args.config) as f:
-        config_dict = json.load(f)
-
-    # Strict key check
-    valid_keys = SubspaceBertConfig.__init__.__code__.co_varnames
-    valid_keys = set(valid_keys) - {"self", "kwargs"}
-    extra_keys = set(config_dict) - valid_keys
-    if extra_keys:
-        raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
 
     # Will raise TypeError if required args are missing
-    config = SubspaceBertConfig(**config_dict)
+    bert_config = SubspaceBertConfig(**config["model"])
     
     # Check the configuration for mismatched settings.
-    config.validate()
+    bert_config.validate()
 
     model = SubspaceBertForMaskedLM(bert_config)
-    
+
+    # ================================
+    #       Review Configuration
+    # ================================
+
+    # Display architecture
     model
 
+    print("\n======== Model ========")
+    print(json.dumps(config["model"], indent=2))
+    
+    print("\n======== Pre-Train ========")
+    print(json.dumps(config["pre_train"], indent=2))
 
-    print("\n======== Config File ========")
-    print(json.dumps(cfg, indent=2))
+    # Print out final config for quick verification
+    #for k, v in config['pre_train'].items():
+    #    print(f"{k:>25}: {v:>10}")
+
+  
     print("=============================\n")
   
-    """# Review
-
-    ### Parameter Tally
-    """
-
     print("\n======== Parameters ========")
 
     ## Get all of the model's parameters as a list of tuples.
@@ -154,41 +162,30 @@ def main():
 
     print('The model has {:} different named parameters.\n'.format(len(params)))
 
-    # =====================
-    #     Review Params
-    # =====================
-
     total_params = 0
     for p_name, p in params:
         total_params += p.numel()
 
-    cfg["total_elements"] = format_size(total_params)
+    config["stats"]["total_elements"] = format_size(total_params)
 
-    print(f"Total elements: {cfg['total_elements']}\n")
-
-    # Print out final config for quick verification
-    for k, v in cfg.items():
-        print(f"{k:>25}: {v:>10}")
-
-    print("=============================\n")
+    print(f"Total elements: {config['stats']['total_elements']}\n")
 
     # Display a full parameter breakdown using the shared utility
     summarize_parameters(model)
-
 
     # ========================================
     #   Format Settings for WandB Run Name
     # ========================================
     
     # Format the cfg learning rate as a scientific notation string like 5e-4
-    lr_str = '{:.0e}'.format(cfg['learning_rate'])
+    lr_str = '{:.0e}'.format(config['pre_train']['learning_rate'])
 
     # Attention configuration
-    if cfg.get("use_mla"):
-        dense_str = str(cfg.get("num_dense_layers")) + "mha + "
+    if bert_config.get("use_mla"):
+        dense_str = str(bert_config.get("num_dense_layers")) + "mha + "
 
-        if cfg.get("output_subspace"):
-            o_str = "." + str(cfg.get("o_lora_rank"))
+        if bert_config.get("output_subspace"):
+            o_str = "." + str(bert_config.get("o_lora_rank"))
         else:
             o_str = ""
 
@@ -196,21 +193,21 @@ def main():
         attn_str = (
             dense_str
             + "mla."
-            + str(cfg.get("q_lora_rank"))
+            + str(bert_config.get("q_lora_rank"))
             + "."
-            + str(cfg.get("kv_lora_rank"))
+            + str(bert_config.get("kv_lora_rank"))
             + o_str
         )
     else:
         attn_str = "mha"
 
     # MLP Configuration
-    if cfg.get("ffn_decompose"):
+    if bert_config.get("ffn_decompose"):
         # Specify the number of dense mlps and their size.
         dense_str = (
-            str(cfg.get("num_dense_layers"))
+            str(bert_config.get("num_dense_layers"))
             + "mlp."
-            + str(cfg.get("intermediate_size"))
+            + str(bert_config.get("intermediate_size"))
             + " + "
         )
 
@@ -218,29 +215,26 @@ def main():
         mlp_str = (
             dense_str
             + "dcmp."
-            + str(cfg.get("intermediate_size"))
+            + str(bert_config.get("intermediate_size"))
             + "."
-            + str(cfg.get("ffn_rank"))
+            + str(bert_config.get("ffn_rank"))
     )
     else:
-        mlp_str = "mlp." + str(cfg.get("intermediate_size"))
+        mlp_str = "mlp." + str(bert_config.get("intermediate_size"))
 
 
-    run_name = f"{cfg['total_elements']} - {attn_str} - {mlp_str} - h{cfg['hidden_size']} - l{cfg['num_hidden_layers']} - bs{cfg['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
+    run_name = f"{config['stats']['total_elements']} - {attn_str} - {mlp_str} - h{bert_config['hidden_size']} - l{bert_config['num_hidden_layers']} - bs{config['pre_train']['train_batch_size']} - lr{lr_str} - seq{cfg['max_seq_length']}"
 
-    cfg["run_name"] = run_name
+    config['pre_train']["run_name"] = run_name
+    
     model.config.run_name = run_name
 
     print(run_name)
 
-
-
-
-
     wandb.init(
         project="encoder-pretrain", 
         name=run_name,
-        config=cfg
+        config=config
     )
 
     # ===============================
@@ -248,20 +242,20 @@ def main():
     # ===============================
 
     training_args = TrainingArguments(
-        output_dir=cfg["output_dir"],
+        output_dir=config['pre_train']["output_dir"],
         
-        per_device_train_batch_size=cfg["train_batch_size"],
-        per_device_eval_batch_size=cfg["eval_batch_size"],
+        per_device_train_batch_size=config['pre_train']["train_batch_size"],
+        per_device_eval_batch_size=config['pre_train']["eval_batch_size"],
         
-        fp16=cfg.get("fp16", False),
+        fp16=config['pre_train'].get("fp16", False),
         
-        learning_rate=cfg["learning_rate"],
-        num_train_epochs=cfg["num_train_epochs"],
+        learning_rate=config['pre_train']["learning_rate"],
+        num_train_epochs=config['pre_train']["num_train_epochs"],
         
         # Evaluate every xx steps
         # Recent versions changed from 'evaluation_strategy'
         eval_strategy="steps", 
-        eval_steps=cfg.get("eval_steps", 500), # Default to 500
+        eval_steps=config['pre_train'].get("eval_steps", 500), # Default to 500
         
         logging_steps=50,
         
@@ -300,7 +294,7 @@ def main():
     
     finally:
         wandb.finish()
-        trainer.save_model(cfg["output_dir"])
+        trainer.save_model(config['pre_train']["output_dir"])
     
 
 if __name__ == "__main__":
