@@ -58,7 +58,7 @@ def run_eval(model, dataloader, device):
 def main():
 
     # Checkpoints are saved here.
-    model_path = "/content/shared-subspaces/encoder-pretrain/checkpoints/baseline/"
+    model_path = "/content/shared-subspaces/encoder-pretrain/checkpoints/mla/"
 
     # Confirm directory exists
     assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
