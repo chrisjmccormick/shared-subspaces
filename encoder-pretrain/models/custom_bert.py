@@ -568,7 +568,7 @@ class BertAttention(nn.Module):
                 output_attentions,
             )
         attention_output = self.output(self_outputs[0], hidden_states)
-        print("  BertAttention.forward: attention_output.shape", attention_output.shape)
+        #print("  BertAttention.forward: attention_output.shape", attention_output.shape)
         outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
         return outputs
 
@@ -597,7 +597,7 @@ class BertOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
         
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)        
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)        
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -734,7 +734,7 @@ class BertLayer(GradientCheckpointingLayer):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
 
-        print("  BertLayer.forward: attention_output.shape", attention_output.shape)
+        #print("  BertLayer.forward: attention_output.shape", attention_output.shape)
 
         layer_output = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, attention_output
