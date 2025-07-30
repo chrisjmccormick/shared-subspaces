@@ -496,6 +496,11 @@ class BertAttention(nn.Module):
                 max_position_embeddings=config.max_position_embeddings,
                 attention_dropout=config.attention_probs_dropout_prob,
                 rms_norm_eps=config.layer_norm_eps,
+                # ---------------------------------------------
+                # Pass along the selected attention backend so
+                # DeepSeekV3Attention uses the same implementation
+                # (eager, sdpa, or flash) as the parent BERT config.
+                attention_backend=config.attention_backend,
             )
             
             # Set the attention implementation directly.
