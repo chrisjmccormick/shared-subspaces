@@ -290,13 +290,14 @@ def main():
         # Profile the training run to collect performance information.
         # The context records all operations executed by `trainer.train`.
         with torch_profiler.profile(
-            activities=[torch_profiler.ProfilerActivity.CPU],
+            activities=[torch_profiler.ProfilerActivity.CPU, torch_profiler.ProfilerActivity.GPU],
             record_shapes=True,
         ) as prof:
             trainer.train()
 
         # Display a summary of the profiling results.
         print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+        print(prof.key_averages().table(sort_by="gpu_time_total", row_limit=10))
 
         metrics = trainer.evaluate()
         wandb.log(metrics)
