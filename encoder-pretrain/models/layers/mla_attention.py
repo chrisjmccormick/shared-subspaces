@@ -233,7 +233,8 @@ class DeepseekV3Attention(nn.Module):
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx
-        self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
+        self.num_key_value_groups = 1 # TODO - Not sure we want to bother supporting this?
+        #self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
         self.attention_dropout = config.attention_dropout
         self.num_heads = config.num_attention_heads
         self.rope_theta = config.rope_theta
@@ -271,9 +272,9 @@ class DeepseekV3Attention(nn.Module):
         # --------------------------------------
         # Modified - Support output latent space.
         
-        self.add_output_latent = config.add_output_latent
+        self.output_subspace = config.output_subspace
 
-        if self.add_output_latent:
+        if self.output_subspace:
             
             # Per-head output projections
             # (Similar to original W^O, but projects the scored value vectors
@@ -348,6 +349,7 @@ class DeepseekV3Attention(nn.Module):
             q_states = self.q_proj(hidden_states)
         else:
             q_states = self.q_b_proj(self.q_a_layernorm(self.q_a_proj(hidden_states)))
+            
         q_states = q_states.view(query_shape).transpose(1, 2)
         q_pass, q_rot = torch.split(q_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
 
@@ -400,7 +402,7 @@ class DeepseekV3Attention(nn.Module):
 
         # ------------------------------------------------------
         # Modified version: Adding an intermediate latent space.
-        if self.add_output_latent:
+        if self.output_subspace:
             # First, project the scored value vectors onto `o_a_proj`. This is
             # equivalent to projecting onto W^O in standard attention, except 
             # that here we are projecting into an intermediate latent space. 
