@@ -164,6 +164,30 @@ def test_custom_bert_with_mla_output_latent():
     assert outputs.logits.shape == (2, 8, config.vocab_size)
 
 
+def test_mla_with_dense_prefix_layers():
+    """Ensure dense prefix layers fall back to standard MHA."""
+    config = SubspaceBertConfig(
+        vocab_size=100,
+        hidden_size=32,
+        num_hidden_layers=3,
+        num_attention_heads=4,
+        intermediate_size=64,
+        use_mla=True,
+        num_dense_layers=1,
+    )
+    config._attn_implementation = "eager"
+    model = SubspaceBertForMaskedLM(config)
+
+    # First layer should use standard attention
+    assert not isinstance(
+        model.bert.encoder.layer[0].attention.self, DeepseekV3Attention
+    )
+    # Subsequent layers should use MLA
+    assert isinstance(
+        model.bert.encoder.layer[1].attention.self, DeepseekV3Attention
+    )
+
+
 if __name__ == "__main__":
     print("Testing standard BERT forward")
     test_custom_bert_forward()
