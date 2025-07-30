@@ -50,7 +50,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.pytorch_utils import apply_chunking_to_forward, find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import ModelOutput, auto_docstring, get_torch_version, logging
-from .configuration_bert import BertConfig
+from .configuration_bert import SubspaceBertConfig
 # -------------------------------------------------------------
 # Modified: Import DeepSeek MLA components used in our custom mode.
 from .layers.mla_attention import DeepseekV3Attention, DeepseekV3RotaryEmbedding
@@ -842,8 +842,8 @@ class BertPreTrainingHeads(nn.Module):
 
 
 @auto_docstring
-class BertPreTrainedModel(PreTrainedModel):
-    config_class = BertConfig
+class SubspaceBertPreTrainedModel(PreTrainedModel):
+    config_class = SubspaceBertConfig
     load_tf_weights = load_tf_weights_in_bert
     base_model_prefix = "bert"
     supports_gradient_checkpointing = True
@@ -874,7 +874,7 @@ class BertPreTrainedModel(PreTrainedModel):
     Output type of [`BertForPreTraining`].
     """
 )
-class BertForPreTrainingOutput(ModelOutput):
+class SubspaceBertForPreTrainingOutput(ModelOutput):
     r"""
     loss (*optional*, returned when `labels` is provided, `torch.FloatTensor` of shape `(1,)`):
         Total loss as the sum of the masked language modeling loss and the next sequence prediction
@@ -905,7 +905,7 @@ class BertForPreTrainingOutput(ModelOutput):
     `add_cross_attention` set to `True`; an `encoder_hidden_states` is then expected as an input to the forward pass.
     """
 )
-class BertModel(BertPreTrainedModel):
+class SubspaceBertModel(SubspaceBertPreTrainedModel):
     _no_split_modules = ["BertEmbeddings", "BertLayer"]
 
     def __init__(self, config, add_pooling_layer=True):
@@ -1091,13 +1091,13 @@ class BertModel(BertPreTrainedModel):
     sentence prediction (classification)` head.
     """
 )
-class BertForPreTraining(BertPreTrainedModel):
+class SubspaceBertForPreTraining(SubspaceBertPreTrainedModel):
     _tied_weights_keys = ["predictions.decoder.bias", "cls.predictions.decoder.weight"]
 
     def __init__(self, config):
         super().__init__(config)
 
-        self.bert = BertModel(config)
+        self.bert = SubspaceBertModel(config)
         self.cls = BertPreTrainingHeads(config)
 
         # Initialize weights and apply final processing
@@ -1124,7 +1124,7 @@ class BertForPreTraining(BertPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[tuple[torch.Tensor], BertForPreTrainingOutput]:
+    ) -> Union[tuple[torch.Tensor], SubspaceBertForPreTrainingOutput]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
             Labels for computing the masked language modeling loss. Indices should be in `[-100, 0, ...,
@@ -1181,7 +1181,7 @@ class BertForPreTraining(BertPreTrainedModel):
             output = (prediction_scores, seq_relationship_score) + outputs[2:]
             return ((total_loss,) + output) if total_loss is not None else output
 
-        return BertForPreTrainingOutput(
+        return SubspaceBertForPreTrainingOutput(
             loss=total_loss,
             prediction_logits=prediction_scores,
             seq_relationship_logits=seq_relationship_score,
@@ -1195,7 +1195,7 @@ class BertForPreTraining(BertPreTrainedModel):
     Bert Model with a `language modeling` head on top for CLM fine-tuning.
     """
 )
-class BertLMHeadModel(BertPreTrainedModel, GenerationMixin):
+class SubspaceBertLMHeadModel(SubspaceBertPreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["cls.predictions.decoder.bias", "cls.predictions.decoder.weight"]
 
     def __init__(self, config):
@@ -1204,7 +1204,7 @@ class BertLMHeadModel(BertPreTrainedModel, GenerationMixin):
         if not config.is_decoder:
             logger.warning("If you want to use `BertLMHeadModel` as a standalone, add `is_decoder=True.`")
 
-        self.bert = BertModel(config, add_pooling_layer=False)
+        self.bert = SubspaceBertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
 
         # Initialize weights and apply final processing
@@ -1292,7 +1292,7 @@ class BertLMHeadModel(BertPreTrainedModel, GenerationMixin):
 
 
 @auto_docstring
-class BertForMaskedLM(BertPreTrainedModel):
+class SubspaceBertForMaskedLM(SubspaceBertPreTrainedModel):
     _tied_weights_keys = ["predictions.decoder.bias", "cls.predictions.decoder.weight"]
 
     def __init__(self, config):
@@ -1304,7 +1304,7 @@ class BertForMaskedLM(BertPreTrainedModel):
                 "bi-directional self-attention."
             )
 
-        self.bert = BertModel(config, add_pooling_layer=False)
+        self.bert = SubspaceBertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
 
         # Initialize weights and apply final processing
@@ -1405,11 +1405,11 @@ class BertForMaskedLM(BertPreTrainedModel):
     Bert Model with a `next sentence prediction (classification)` head on top.
     """
 )
-class BertForNextSentencePrediction(BertPreTrainedModel):
+class SubspaceBertForNextSentencePrediction(SubspaceBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        self.bert = BertModel(config)
+        self.bert = SubspaceBertModel(config)
         self.cls = BertOnlyNSPHead(config)
 
         # Initialize weights and apply final processing
@@ -1506,13 +1506,13 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
     output) e.g. for GLUE tasks.
     """
 )
-class BertForSequenceClassification(BertPreTrainedModel):
+class SubspaceBertForSequenceClassification(SubspaceBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.config = config
 
-        self.bert = BertModel(config)
+        self.bert = SubspaceBertModel(config)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
@@ -1596,11 +1596,11 @@ class BertForSequenceClassification(BertPreTrainedModel):
 
 
 @auto_docstring
-class BertForMultipleChoice(BertPreTrainedModel):
+class SubspaceBertForMultipleChoice(SubspaceBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        self.bert = BertModel(config)
+        self.bert = SubspaceBertModel(config)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
@@ -1703,12 +1703,12 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
 
 @auto_docstring
-class BertForTokenClassification(BertPreTrainedModel):
+class SubspaceBertForTokenClassification(SubspaceBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModel(config, add_pooling_layer=False)
+        self.bert = SubspaceBertModel(config, add_pooling_layer=False)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
@@ -1773,12 +1773,12 @@ class BertForTokenClassification(BertPreTrainedModel):
 
 
 @auto_docstring
-class BertForQuestionAnswering(BertPreTrainedModel):
+class SubspaceBertForQuestionAnswering(SubspaceBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModel(config, add_pooling_layer=False)
+        self.bert = SubspaceBertModel(config, add_pooling_layer=False)
         self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
@@ -1851,16 +1851,31 @@ class BertForQuestionAnswering(BertPreTrainedModel):
 
 
 __all__ = [
-    "BertForMaskedLM",
-    "BertForMultipleChoice",
-    "BertForNextSentencePrediction",
-    "BertForPreTraining",
-    "BertForQuestionAnswering",
-    "BertForSequenceClassification",
-    "BertForTokenClassification",
+    "SubspaceBertForMaskedLM",
+    "SubspaceBertForMultipleChoice",
+    "SubspaceBertForNextSentencePrediction",
+    "SubspaceBertForPreTraining",
+    "SubspaceBertForQuestionAnswering",
+    "SubspaceBertForSequenceClassification",
+    "SubspaceBertForTokenClassification",
     "BertLayer",
-    "BertLMHeadModel",
-    "BertModel",
-    "BertPreTrainedModel",
+    "SubspaceBertLMHeadModel",
+    "SubspaceBertModel",
+    "SubspaceBertPreTrainedModel",
     "load_tf_weights_in_bert",
 ]
+
+# ---------------------------------------------------------------------------
+# Aliases so existing code referring to the old BERT class names continues to
+# function.  This allows a gradual transition to the new `SubspaceBert*` names.
+BertPreTrainedModel = SubspaceBertPreTrainedModel
+BertModel = SubspaceBertModel
+BertForPreTraining = SubspaceBertForPreTraining
+BertLMHeadModel = SubspaceBertLMHeadModel
+BertForMaskedLM = SubspaceBertForMaskedLM
+BertForNextSentencePrediction = SubspaceBertForNextSentencePrediction
+BertForSequenceClassification = SubspaceBertForSequenceClassification
+BertForMultipleChoice = SubspaceBertForMultipleChoice
+BertForTokenClassification = SubspaceBertForTokenClassification
+BertForQuestionAnswering = SubspaceBertForQuestionAnswering
+BertForPreTrainingOutput = SubspaceBertForPreTrainingOutput

@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from models.custom_bert import BertForMaskedLM, BertConfig
+from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
 from models.layers.mla_attention import (
     DeepseekV3Attention,
     DeepseekV3Config,
@@ -16,7 +16,7 @@ from models.layers.mla_attention import (
 
 
 def test_custom_bert_forward():
-    config = BertConfig(
+    config = SubspaceBertConfig(
         vocab_size=100,
         hidden_size=32,
         num_hidden_layers=2,
@@ -25,7 +25,7 @@ def test_custom_bert_forward():
     )
     # Use standard attention implementation
     config._attn_implementation = "eager"
-    model = BertForMaskedLM(config)
+    model = SubspaceBertForMaskedLM(config)
     # generate random input ids (batch_size=2, seq_len=8)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
@@ -131,7 +131,7 @@ def test_deepseek_attention_flash():
 """
 
 def test_custom_bert_with_mla():
-    config = BertConfig(
+    config = SubspaceBertConfig(
         vocab_size=100,
         hidden_size=32,
         num_hidden_layers=2,
@@ -141,14 +141,14 @@ def test_custom_bert_with_mla():
     config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
     config.add_output_latent = False
-    model = BertForMaskedLM(config)
+    model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
     assert outputs.logits.shape == (2, 8, config.vocab_size)
 
 
 def test_custom_bert_with_mla_output_latent():
-    config = BertConfig(
+    config = SubspaceBertConfig(
         vocab_size=100,
         hidden_size=32,
         num_hidden_layers=2,
@@ -158,7 +158,7 @@ def test_custom_bert_with_mla_output_latent():
     config._attn_implementation = "eager" # Allows for manual implementation.
     config.use_mla = True # Use this to choose MLA instead.
     config.add_output_latent = True
-    model = BertForMaskedLM(config)
+    model = SubspaceBertForMaskedLM(config)
     input_ids = torch.randint(0, config.vocab_size, (2, 8))
     outputs = model(input_ids=input_ids)
     assert outputs.logits.shape == (2, 8, config.vocab_size)
