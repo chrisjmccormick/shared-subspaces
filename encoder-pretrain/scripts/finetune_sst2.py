@@ -1,4 +1,11 @@
+"""Fine-tune a pretrained encoder on the SST-2 task. The original script
+assumed a fixed checkpoint directory. We now accept a config file on the
+command line so the script can locate the appropriate `output_dir` created
+during pretraining."""
+
 import os
+import argparse
+import json
 import wandb
 import torch
 from torch import nn
@@ -21,6 +28,13 @@ from models.custom_bert import SubspaceBertForSequenceClassification, SubspaceBe
 # Filter out some unhelpful warnings cluttering the output.
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+
+def parse_args():
+    """Return CLI args with path to a config JSON."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True, help="Path to JSON config")
+    return parser.parse_args()
 
 # Wrapt the tokenizer so that we can use dataset.map further down.
 def tokenize_fn(example, tokenizer, max_length=128):
@@ -56,16 +70,19 @@ def run_eval(model, dataloader, device):
 #      Main
 # =================
 def main():
+    args = parse_args()
 
-    # Checkpoints are saved here.
-    model_path = "/content/shared-subspaces/encoder-pretrain/checkpoints/mla/"
+    with open(args.config) as f:
+        cfg = json.load(f)
+
+    model_path = cfg["output_dir"]
 
     # Confirm directory exists
     assert os.path.exists(model_path), f"Directory does not exist: {model_path}"
 
     config = {
         "model_path": model_path,
-        "task": "cola",
+        "task": "sst2",
         "batch_size": 16,
         "lr": 2e-5,
         "epochs": 3,
