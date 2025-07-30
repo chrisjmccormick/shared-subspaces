@@ -45,7 +45,7 @@
   
   "output_subspace": true,
   "ffn_decompose": true,
-  "ffn_rank": 128
+  "ffn_rank": 128,
   
   "attention_backend": "sdpa"
 }
