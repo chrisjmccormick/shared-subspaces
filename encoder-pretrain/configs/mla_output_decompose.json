@@ -3,7 +3,7 @@
   
   "num_hidden_layers": 6,
 
-  "num_dense_layers": 1,
+  "num_dense_layers": 2,
   
   "hidden_size": 256,
   
@@ -46,4 +46,6 @@
   "output_subspace": true,
   "ffn_decompose": true,
   "ffn_rank": 128
+  
+  "attention_backend": "sdpa"
 }
