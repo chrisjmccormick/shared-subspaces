@@ -163,8 +163,6 @@ class SubspaceBertConfig(PretrainedConfig):
         self.v_head_dim = v_head_dim if v_head_dim is not None else hidden_size // num_attention_heads
         self.qk_nope_head_dim = qk_nope_head_dim
         self.output_subspace = output_subspace
-        # Maintain backwards compatibility
-        self.add_output_latent = output_subspace
         self.o_lora_rank = o_lora_rank if o_lora_rank is not None else hidden_size
         # When using MLA, the first `num_dense_layers` will still use
         # standard MHA. This mirrors practices from some MoE models.
@@ -172,9 +170,6 @@ class SubspaceBertConfig(PretrainedConfig):
         # ------------------------------------------------
         # Modified: Store decomposed FFN settings.
         self.ffn_decompose = ffn_decompose
-        # Backwards compatibility
-        self.use_decomp_mlp = ffn_decompose
-        # Allow legacy name `ffn_rank` for the latent dimension.
         self.ffn_rank = ffn_rank if ffn_rank is not None else hidden_size
         # ------------------------------------------------
 
@@ -183,11 +178,7 @@ class SubspaceBertConfig(PretrainedConfig):
         # we can track how options like `num_dense_layers`
         # are being passed around during initialization.
         print(
-            "SubspaceBertConfig initialized with \n"
-            f"  num_hidden_layers={self.num_hidden_layers}\n"
-            f"            use_mla={self.use_mla}\n"
-            f"   num_dense_layers={self.num_dense_layers}\n"
-            f"   ffn_decompose={self.ffn_decompose}\n"
+             "  > SubspaceBertConfig.init - {self.num_hidden_layers}l - mla{self.use_mla} - ndense{self.num_dense_layers} - dcmp{self.ffn_decompose}\n"
         )
         # ------------------------------------------------
 
