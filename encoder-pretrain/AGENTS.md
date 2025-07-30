@@ -169,7 +169,7 @@ attn_output, attn_weights = attention_interface(
 	key_states,
 	value_states,
 	attention_mask,
-	dropout=0.0 if not self.training else self.attention_dropout,
+	dropout=0.0 if not self.training else self.attention_dropout_prob,
 	scaling=self.scaling,
 	**kwargs,
 )

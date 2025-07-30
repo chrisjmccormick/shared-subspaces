@@ -15,7 +15,7 @@
   "max_seq_length": 128,
   "hidden_act": "gelu",
   "hidden_dropout_prob": 0.1,
-  "attention_probs_dropout_prob": 0.1,
+  "attention_dropout_prob": 0.1,
 
   "q_lora_rank": 64,
   "kv_lora_rank": 48,

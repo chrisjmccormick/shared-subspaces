@@ -7,6 +7,7 @@ import os
 import torch
 from torch import profiler as torch_profiler
 
+import wandb
 from datasets import load_dataset
 import transformers
 from transformers import (
@@ -58,9 +59,14 @@ def main():
     # Set random seed for reproducibility
     set_seed(cfg.get("seed", 42))
 
-
-    # WandB was used originally for experiment tracking. This profiler script
-    # should run without external logging, so all WandB setup is removed.
+    # Setup Weights & Biases
+    # Use offline mode if the API key isn't in the environment variables.
+    if "WANDB_MODE" not in os.environ:
+        os.environ["WANDB_MODE"] = "offline"
+    
+    wandb_api_key = os.environ.get("WANDB_API_KEY")
+    if wandb_api_key:
+        wandb.login(key=wandb_api_key)
 
     
     # Use the standard BERT tokenizer.
@@ -109,7 +115,7 @@ def main():
         type_vocab_size=cfg.get("type_vocab_size", 2),
         hidden_act=cfg.get("hidden_act", "gelu"),
         hidden_dropout_prob=cfg.get("hidden_dropout_prob", 0.1),
-        attention_probs_dropout_prob=cfg.get("attention_probs_dropout_prob", 0.1),
+        attention_dropout_prob=cfg.get("attention_dropout_prob", 0.1),
         use_mla=cfg.get("use_mla", False),
         kv_lora_rank=cfg.get("kv_lora_rank"),
         q_lora_rank=cfg.get("q_lora_rank"),
@@ -222,7 +228,11 @@ def main():
 
 
 
-    # All experiment tracking is handled locally; disable WandB initialization.
+    wandb.init(
+        project="encoder-pretrain", 
+        name=run_name,
+        config=cfg
+    )
 
     # ===============================
     #       Training Arguments
@@ -249,11 +259,10 @@ def main():
         logging_steps=50,
         
         # Checkpoint saving
-        # Disable checkpoint saving and external reporting for a clean profiler
-        # run. We still set an output directory so HF doesn't complain, but no
-        # checkpoints will actually be written.
-        save_strategy="no",
-        report_to=[],
+        save_steps=500,
+        save_total_limit=2,           # Optional: keeps last 2 checkpoints
+        save_strategy="steps",
+        report_to=["wandb"],
         run_name=run_name,
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
     )
@@ -278,35 +287,24 @@ def main():
     # =====================
 
     try:
-        # Reset GPU memory trackers so reported numbers only include this run.
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
-
         # Profile the training run to collect performance information.
         # The context records all operations executed by `trainer.train`.
         with torch_profiler.profile(
             activities=[torch_profiler.ProfilerActivity.CPU, torch_profiler.ProfilerActivity.GPU],
             record_shapes=True,
-            profile_memory=True,  # Capture GPU memory usage
         ) as prof:
             trainer.train()
 
         # Display a summary of the profiling results.
         print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
         print(prof.key_averages().table(sort_by="gpu_time_total", row_limit=10))
-        print(prof.key_averages().table(sort_by="self_cuda_memory_usage", row_limit=10))
 
         metrics = trainer.evaluate()
-        print("Evaluation metrics:", metrics)
+        wandb.log(metrics)
     
-        # Report peak GPU memory usage for quick reference.
-        if torch.cuda.is_available():
-            max_mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
-            print(f"Peak GPU memory allocated: {max_mem:.2f} GB")
-
     finally:
-        # Do not save checkpoints when profiling.
-        pass
+        wandb.finish()
+        trainer.save_model(cfg["output_dir"])
     
 
 if __name__ == "__main__":

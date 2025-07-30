@@ -31,7 +31,7 @@
     "ffn_rank":          null,
 	
 	"hidden_dropout_prob":          0.1,
-    "attention_probs_dropout_prob": 0.1,
+    "attention_dropout_prob": 0.1,
     "classifier_dropout":           null,
     
 	"use_cache":            true,

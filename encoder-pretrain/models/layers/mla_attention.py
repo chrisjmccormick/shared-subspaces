@@ -235,7 +235,7 @@ class DeepseekV3Attention(nn.Module):
         self.layer_idx = layer_idx
         self.num_key_value_groups = 1 # TODO - Not sure we want to bother supporting this?
         #self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
-        self.attention_dropout = config.attention_dropout
+        self.attention_dropout_prob = config.attention_dropout_prob
         self.num_heads = config.num_attention_heads
         self.rope_theta = config.rope_theta
         self.q_lora_rank = config.q_lora_rank
@@ -391,7 +391,7 @@ class DeepseekV3Attention(nn.Module):
             key_states,
             value_states,
             attention_mask,
-            dropout=0.0 if not self.training else self.attention_dropout,
+            dropout=0.0 if not self.training else self.attention_dropout_prob,
             scaling=self.scaling,
             **kwargs,
         )

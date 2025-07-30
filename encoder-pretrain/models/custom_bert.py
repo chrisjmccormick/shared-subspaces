@@ -143,7 +143,7 @@ class BertSelfAttention(nn.Module):
         self.key = nn.Linear(config.hidden_size, self.all_head_size)
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
-        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.dropout = nn.Dropout(config.attention_dropout_prob)
         self.position_embedding_type = position_embedding_type or getattr(
             config, "position_embedding_type", "absolute"
         )
@@ -263,7 +263,7 @@ class BertSelfAttention(nn.Module):
 class BertSdpaSelfAttention(BertSelfAttention):
     def __init__(self, config, position_embedding_type=None):
         super().__init__(config, position_embedding_type=position_embedding_type)
-        self.dropout_prob = config.attention_probs_dropout_prob
+        self.dropout_prob = config.attention_dropout_prob
         self.require_contiguous_qkv = version.parse(get_torch_version()) < version.parse("2.2.0")
 
     # Adapted from BertSelfAttention

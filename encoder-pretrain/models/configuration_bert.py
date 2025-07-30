@@ -24,7 +24,7 @@ class SubspaceBertConfig(PretrainedConfig):
     - intermediate_size (`int`) — Feed-forward hidden dimension.
     - hidden_act (`str`) — Activation function.
     - hidden_dropout_prob (`float`) — Dropout after projections and FFNs.
-    - attention_probs_dropout_prob (`float`) — Dropout on attention weights.
+    - attention_dropout_prob (`float`) — Dropout applied to attention scores.
     - max_position_embeddings (`int`) — Max sequence length.
     - type_vocab_size (`int`) — Size of `token_type_ids` embedding.
     - initializer_range (`float`) — Stddev of weight init.
@@ -80,7 +80,7 @@ class SubspaceBertConfig(PretrainedConfig):
         intermediate_size=3072,
         hidden_act="gelu",
         hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
+        attention_dropout_prob=0.1,
         max_position_embeddings=512,
         type_vocab_size=2,
         initializer_range=0.02,
@@ -124,7 +124,7 @@ class SubspaceBertConfig(PretrainedConfig):
         self.hidden_act = hidden_act
         self.intermediate_size = intermediate_size
         self.hidden_dropout_prob = hidden_dropout_prob
-        self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.attention_dropout_prob = attention_dropout_prob
         self.max_position_embeddings = max_position_embeddings
         self.type_vocab_size = type_vocab_size
         self.initializer_range = initializer_range
