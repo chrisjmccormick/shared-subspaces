@@ -22,7 +22,7 @@
 	"output_subspace":   true,
     "o_lora_rank":       64,
 	
-    "attention_backend": "flash",
+    "attention_backend": "sdpa",
 
     "ffn_decompose":     true,
     "ffn_rank":          128,
