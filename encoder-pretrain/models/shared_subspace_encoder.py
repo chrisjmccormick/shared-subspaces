@@ -101,19 +101,43 @@ class SharedSubspaceEncoderPreTrainedModel(PreTrainedModel):
 class SharedSubspaceEncoderLayer(nn.Module):
     """
     The **Layer object:
-      - Is instantiated by TODO
+      - Is instantiated by :class:`SharedSubspaceEncoderModel` for each
+        Transformer block in the encoder.
       - Initializes:
-        - TODO
-      - Provides access to TODO
-      - Executes TODO
+        - ``self_attn`` – multi-head latent attention implementing either
+          dense or latent projections depending on the configuration.
+        - ``mlp`` – a :class:`SubspaceFeedForward` block.
+        - Dropout and LayerNorm used for the residual connection around the
+          attention block.
+      - Provides access to the attention and feed-forward submodules via the
+        attributes ``self_attn`` and ``mlp``.
+      - Executes a single encoder block in :meth:`forward`.
     """
 
     def __init__(self, config: SharedSubspaceEncoderConfig, layer_idx: int) -> None:
         
         super().__init__()
-        
+
         self.self_attn = MultiheadLatentAttention(config, layer_idx)
-        # TODO: add MLP and layer norms
+
+        # Ensure optional FFN flags exist for SubspaceFeedForward
+        if not hasattr(config, "ffn_decompose"):
+            config.ffn_decompose = False
+        if not hasattr(config, "hidden_dropout_prob"):
+            config.hidden_dropout_prob = 0.0
+        if not hasattr(config, "eps"):
+            config.eps = 1e-5
+
+        # Feed-forward network used after attention
+        self.mlp = SubspaceFeedForward(config)
+
+        # Residual components for the attention block
+        self.attn_dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        self.attn_norm = nn.LayerNorm(
+            config.hidden_size,
+            eps=getattr(config, "layer_norm_eps", getattr(config, "eps", 1e-5)),
+        )
 
     def forward(
         self,
@@ -123,7 +147,31 @@ class SharedSubspaceEncoderLayer(nn.Module):
         position_embeddings: torch.Tensor,
         attention_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        raise NotImplementedError
+        # === Tensor Dimension Symbols ===
+        #  B: batch_size    — number of samples in the batch
+        #  T: seq_len       — number of tokens per sample
+        #  D: hidden_dim    — model embedding size
+
+        residual = hidden_states  # [B, T, D]
+
+        # ==============================
+        #     Self Attention
+        # ==============================
+        attn_out = self.self_attn(
+            hidden_states,
+            position_embeddings,
+            attention_mask,
+        )
+
+        attn_out = self.attn_dropout(attn_out)
+        hidden_states = self.attn_norm(attn_out + residual)
+
+        # ==============================
+        #     Feed Forward
+        # ==============================
+        hidden_states = self.mlp(hidden_states)
+
+        return hidden_states
 
 
 class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
