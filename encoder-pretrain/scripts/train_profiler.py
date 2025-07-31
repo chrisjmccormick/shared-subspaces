@@ -293,7 +293,7 @@ def main():
         
         # Let's sanity check that this is actually the problem.
         #logging_steps=100,
-        logging_steps=float('inf'),
+        logging_steps=1000000,
         
         # Checkpoint saving
         save_steps=500,
