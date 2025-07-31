@@ -1,4 +1,150 @@
 
+"""SharedSubspaceEncoder skeleton.
+
+This module contains very small stubs that mimic HuggingFace model classes.
+The intent is to keep things easy to read while we experiment with shared
+subspaces.
+
+Style notes:
+    - Keep assumptions explicit with ``assert`` and fail fast if a required
+      field is missing.
+    - Avoid inferring shapes or configuration defaults; raise an error instead
+      of silently guessing.
+    - Comment code that relies on HuggingFace conventions so newcomers can
+      follow along.
+    - Boilerplate should be minimal and clearly marked.
+
+The model is encoder-only and will use RoPE for positional information rather
+than a learnable embedding table.
+"""
+
+from typing import Optional
+
+import torch
+from torch import nn
+
+from transformers.configuration_utils import PretrainedConfig
+from transformers.modeling_utils import PreTrainedModel
+
+
+class SharedSubspaceEncoderConfig(PretrainedConfig):
+    """Configuration for :class:`SharedSubspaceEncoderModel`."""
+
+    model_type = "shared_subspace_encoder"
+
+    def __init__(
+        self,
+        vocab_size: int = 30522,
+        hidden_size: int = 768,
+        num_hidden_layers: int = 12,
+        num_attention_heads: int = 12,
+        intermediate_size: int = 3072,
+        max_position_embeddings: int = 2048,
+        use_mla: bool = False,
+        q_lora_rank: int | None = None,
+        kv_lora_rank: int | None = None,
+        head_dim: int | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+
+        self.vocab_size = vocab_size
+        self.hidden_size = hidden_size
+        self.num_hidden_layers = num_hidden_layers
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
+        self.max_position_embeddings = max_position_embeddings
+
+        self.use_mla = use_mla
+        self.q_lora_rank = q_lora_rank
+        self.kv_lora_rank = kv_lora_rank
+        self.head_dim = head_dim
+
+        # Explicitly mark this as an encoder-only architecture
+        self.is_decoder = False
+
+
+class SharedSubspaceEncoderPreTrainedModel(PreTrainedModel):
+    """Base class with weight initialization."""
+
+    config_class = SharedSubspaceEncoderConfig
+    base_model_prefix = "model"
+
+    def _init_weights(self, module: nn.Module) -> None:
+        """Weight initialization hook used by :class:`PreTrainedModel`.
+
+        ``PreTrainedModel.post_init`` will recursively apply this function to
+        every submodule right after construction.  HuggingFace models override
+        it so that creating a model from scratch yields the same initialization
+        as ``from_pretrained`` when no checkpoint is supplied.
+
+        The modules themselves come with PyTorch defaults; this method simply
+        enforces the initializer scheme used throughout the library.  It is not
+        required, but leaving it out would lead to slightly different weight
+        statistics.
+        """
+
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+
+class SharedSubspaceEncoderLayer(nn.Module):
+    """Single transformer block using :class:`MultiheadLatentAttention`."""
+
+    def __init__(self, config: SharedSubspaceEncoderConfig, layer_idx: int) -> None:
+        super().__init__()
+        self.self_attn = MultiheadLatentAttention(config, layer_idx)
+        # TODO: add MLP and layer norms
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        # ``position_embeddings`` carries the RoPE ``(cos, sin)`` tensors rather
+        # than an index-based embedding lookup.
+        position_embeddings: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+
+class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
+    """Minimal encoder model with shared subspaces."""
+
+    def __init__(self, config: SharedSubspaceEncoderConfig) -> None:
+        super().__init__(config)
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
+        # RoPE will supply position information; we intentionally omit a learned
+        # position embedding table.
+        self.layers = nn.ModuleList(
+            [SharedSubspaceEncoderLayer(config, i) for i in range(config.num_hidden_layers)]
+        )
+
+        self.post_init()
+
+    def get_input_embeddings(self) -> nn.Embedding:
+        return self.embed_tokens
+
+    def set_input_embeddings(self, value: nn.Module) -> None:
+        self.embed_tokens = value
+
+    def forward(
+        self,
+        input_ids: torch.LongTensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+
 class MultiheadLatentAttention(nn.Module):
     """
     A variant of MLA with:
@@ -8,7 +154,7 @@ class MultiheadLatentAttention(nn.Module):
     - Optional output subspace
     """
 
-    def __init__(self, config: SubspaceBertConfig, layer_idx: int):
+    def __init__(self, config: SharedSubspaceEncoderConfig, layer_idx: int):
         super().__init__()
         
         self.config = config
