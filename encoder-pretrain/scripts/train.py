@@ -65,8 +65,7 @@ def parse_args():
 def main():
     args = parse_args()
     
-    # Load the config file.
-    
+    # Load the config file.    
     with open(args.config) as f:
         config = json.load(f)
 
@@ -132,7 +131,7 @@ def main():
     )
 
 
-    # Will raise TypeError if required args are missing
+    # Will raise TypeError, by design, if required args are missing
     bert_config = SubspaceBertConfig(**config["model"])
     
     model = SubspaceBertForMaskedLM(bert_config)
