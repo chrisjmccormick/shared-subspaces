@@ -467,3 +467,120 @@ class MultiheadLatentAttention(nn.Module):
         # -----------------------------------------
 
         return attn_output  #, attn_weights - TODO - does transformers require these?
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class SubspaceFeedForward(nn.Module):
+    """
+    Feed-forward block for SharedSubspaceEncoder.
+    
+    Implements SwiGLU:
+        FFN(x) = W_out( Swish(W_in(x)) ⊙ W_gate(x) ) + residual
+
+    Supports both dense and decomposed MLP variants.
+
+    Dense:
+        - W_in:   Linear(hidden_dim → intermediate_dim)
+        - W_gate: Linear(hidden_dim → intermediate_dim)
+        - W_out:  Linear(intermediate_dim → hidden_dim)
+
+    Decomposed:
+        - W_in_shared:   Linear(hidden_dim → rank, bias=False)
+        - W_in:          Linear(rank → intermediate_dim)
+        - W_gate_shared: Linear(hidden_dim → rank, bias=False)
+        - W_gate:        Linear(rank → intermediate_dim)
+        - W_out:         Linear(intermediate_dim → rank, bias=False)
+        - W_out_shared:  Linear(rank → hidden_dim)
+
+    Residual, dropout, and post-norm are handled inside the block.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+
+        hidden_dim = config.hidden_size
+        intermediate_dim = config.intermediate_size
+        dropout_prob = config.hidden_dropout_prob
+        eps = config.layer_norm_eps
+
+        self.use_decomposition = getattr(config, "ffn_decompose", False)
+
+        if self.use_decomposition:
+            assert hasattr(config, "ffn_rank") and config.ffn_rank is not None, \
+                "Must specify `ffn_rank` when `ffn_decompose=True`."
+            rank = config.ffn_rank
+
+            # === Input Projections ===
+            self.W_in_shared = nn.Linear(hidden_dim, rank, bias=False)
+            self.W_in = nn.Linear(rank, intermediate_dim)
+
+            # === Gate Projections ===
+            self.W_gate_shared = nn.Linear(hidden_dim, rank, bias=False)
+            self.W_gate = nn.Linear(rank, intermediate_dim)
+
+            # === Output Projection ===
+            self.W_out = nn.Linear(intermediate_dim, rank, bias=False)
+            self.W_out_shared = nn.Linear(rank, hidden_dim)
+
+        else:
+            # === Dense FFN Projections ===
+            self.W_in = nn.Linear(hidden_dim, intermediate_dim)
+            self.W_gate = nn.Linear(hidden_dim, intermediate_dim)
+            self.W_out = nn.Linear(intermediate_dim, hidden_dim)
+
+        self.dropout = nn.Dropout(dropout_prob)
+        self.norm = nn.LayerNorm(hidden_dim, eps=eps)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # === Tensor Dimension Symbols ===
+        # B: batch_size     — number of samples in the batch
+        # T: seq_len        — number of tokens per sample
+        # D: hidden_dim     — model embedding size
+        # R: ffn_rank       — latent shared subspace dimension
+        # D_ff: intermediate_size — FFN hidden dimension
+
+        residual = x  # [B, T, D]
+
+        if self.use_decomposition:
+            # ==============================
+            #     SwiGLU Feedforward (Decomposed)
+            # ==============================
+
+            # Input:  x [B, T, D]
+            # Output: x_proj [B, T, D_ff]
+            x_proj = self.W_in(self.W_in_shared(x))
+
+            # Input:  x [B, T, D]
+            # Output: gate [B, T, D_ff]
+            gate = self.W_gate(self.W_gate_shared(x))
+
+            # SwiGLU nonlinearity
+            x = F.silu(x_proj) * gate  # [B, T, D_ff]
+
+            # Output: x [B, T, D]
+            x = self.W_out_shared(self.W_out(x))
+
+        else:
+            # ==============================
+            #     SwiGLU Feedforward (Dense)
+            # ==============================
+
+            # Input:  x [B, T, D]
+            # Output: x_proj [B, T, D_ff]
+            x_proj = self.W_in(x)
+
+            # Output: gate [B, T, D_ff]
+            gate = self.W_gate(x)
+
+            # SwiGLU nonlinearity
+            x = F.silu(x_proj) * gate  # [B, T, D_ff]
+
+            # Output: x [B, T, D]
+            x = self.W_out(x)
+
+        x = self.dropout(x)
+        x = self.norm(x + residual)  # [B, T, D]
+        return x
