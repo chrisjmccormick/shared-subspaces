@@ -431,10 +431,10 @@ class MultiheadLatentAttention(nn.Module):
         #    T: seq_len        — number of tokens per sample
         #    H: n_heads        — number of attention heads
         #    D: hidden_dim     — model embedding size
-        #   Dh: head_dim      — per-head projection dimension
-        #   Cq:  TODO
-        #  Ckv:
-        #   Co:
+        #   Dh: head_dim       — per-head projection dimension
+        #   Cq: q_latent_dim   - query latent subspace size
+        #  Ckv: kv_latent_dim  - key-value latent subspace size
+        #   Co: o_latent_dim   - output latent subspace size
 
 
         # Input token embeddings
