@@ -172,6 +172,12 @@ class MultiheadLatentAttention(nn.Module):
         self.q_lora_rank = config.q_lora_rank
         self.kv_lora_rank = config.kv_lora_rank
 
+        # Explicit dimensional attributes for clarity
+        self.hidden_size = config.hidden_size
+        self.v_head_dim = config.v_head_dim
+        self.q_lora_dim = config.q_lora_rank
+        self.kv_lora_dim = config.kv_lora_rank
+
         #self.qk_rope_head_dim = config.qk_rope_head_dim -- Remove
         #self.v_head_dim = config.v_head_dim # Remove
         #self.qk_nope_head_dim = config.qk_nope_head_dim -- Remove
@@ -331,63 +337,89 @@ class MultiheadLatentAttention(nn.Module):
         cache_position: Optional[torch.LongTensor] = None, # TODO - Can I remove this?
         **kwargs,
     ) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[tuple[torch.Tensor]]]:
-        
-        batch_size, seq_length = hidden_states.shape[:-1]
+        # === Tensor Dimension Symbols ===
+        # B: batch_size     — number of samples in the batch
+        # T: seq_len        — number of tokens per sample
+        # H: n_heads        — number of attention heads
+        # D: hidden_dim     — model embedding size
+        # Dh: head_dim      — per-head projection dimension
+        # Dc: compress_dim  — dimension of latent (e.g., LoRA or MLA) subspace
+        # R: rope_dim       — rotary positional embedding size
+        # C: cache_dim      — compressed key/value dimension
+
+        B, T = hidden_states.shape[:2]
         
 
-        # ==========================
-        #    QKV Head Projections
-        # ==========================
+        # ==============================
+        #     QKV Head Projections
+        # ==============================
 
-        # If we're using the latent projections,
+        # If this layer uses latent projections,
         if self.latent_spaces:
 
-            # Project the tokens onto the latent spaces. This is two separate
-            # projections, one for query latent and the other for the kv latent,
-            # concatenated into one 'qkv_a' matrix. 
+            # Project token embeddings into shared latents
+            # Input:  hidden_states [B, T, D]
+            # Output: input_latents [B, T, Dc_q + Dc_kv]
             input_latents = self.qkv_a_proj(hidden_states)
-            
-            # Apply normalization to the latents. 
-            # (TODO - Ok to normalize these together?)
-            input_latents = self.qkv_a_layernorm(input_latents)           
-            
-            # Break apart into query and key-value latents.
-            q_latents, kv_latents = torch.split(input_latents, [self.q_lora_dim, self.kv_lora_dim], dim=-1)
 
-            # Project the query latents onto the query heads. 
+            # Normalize latent vectors
+            # Input:  input_latents [B, T, Dc_q + Dc_kv]
+            # Output: input_latents [B, T, Dc_q + Dc_kv]
+            input_latents = self.qkv_a_layernorm(input_latents)
+
+            # Split latents for queries and keys/values
+            # Input:  input_latents [B, T, Dc_q + Dc_kv]
+            # Outputs:
+            #   q_latents  [B, T, Dc_q]
+            #   kv_latents [B, T, Dc_kv]
+            q_latents, kv_latents = torch.split(
+                input_latents, [self.q_lora_dim, self.kv_lora_dim], dim=-1
+            )
+
+            # Linear projection of query latents
+            # Input:  q_latents [B, T, Dc_q]
+            # Output: queries [B, T, H * Dh]
             queries = self.q_b_proj(q_latents)
 
-            # Project the kv latents onto the key heads and value heads (kv)
+            # Linear projection of key/value latents
+            # Input:  kv_latents [B, T, Dc_kv]
+            # Output: keysvalues [B, T, H * 2 * Dh]
             keysvalues = self.kv_b_proj(kv_latents)
-            
-            # Split them apart
-            keys, values = torch.split(keysvalues, [self.head_dim, self.head_im], dim=-1)
+
+            # Split into key and value tensors
+            # Each: [B, T, H * Dh]
+            keys, values = keysvalues.chunk(2, dim=-1)
             # TODO - Can einsum project and split?
 
-        # If this is a dense attention layer (no latent projections--we'll do this in
-        # early layers),        
+        # If this is a dense attention layer (no latent projections),
         else:
-            # Project the hidden states onto the query, key, and value projections.
+            # Standard QKV projection
+            # Input:  hidden_states [B, T, D]
+            # Output: querieskeysvalues [B, T, H * 3 * Dh]
             querieskeysvalues = self.qkv_proj(hidden_states)
 
-            # Split them apart
-            queries, keys, values = torch.split(querieskeysvalues, [self.head_dim, self.head_dim, self.head_dim], dim=-1)
+            # Separate query, key, and value vectors
+            # Each: [B, T, H * Dh]
+            queries, keys, values = querieskeysvalues.chunk(3, dim=-1)
         
         # ==================
         #        RoPE
         # ==================
 
-        # Apply RoPE only to the last `rope_dims` dimensions of the querys and 
-        # keys.
-        # TODO...
+        # Apply rotary position embeddings to a portion of Q/K
+        # queries, keys: [B, T, H * Dh]
+        # TODO: implement RoPE across the final `self.rope_dims` dims
 
         # ===================
         #      Attention
         # ===================
 
-        # Reshape for SDPA / Flash Attention
-
-        # TODO...
+        # Reshape Q, K, V for attention computation
+        # Inputs:
+        #   queries [B, T, H * Dh]
+        #   keys    [B, T, H * Dh]
+        #   values  [B, T, H * Dh]
+        # TODO: split head dimension and call backend
 
         # Invoke
 
