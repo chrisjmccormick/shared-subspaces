@@ -71,9 +71,9 @@ class CustomTrainer(Trainer):
             pin_memory=self.config.get("pre_train", {}).get("pin_memory", True),
         )
 
-    def training_step(self, model, inputs):
+    def training_step(self, model, inputs, num_samples):
         """Detach loss and only convert to scalar on logging steps."""
-        loss = super().training_step(model, inputs)
+        loss = super().training_step(model, inputs, num_samples)
 
         if (
             self.args.logging_steps > 0
