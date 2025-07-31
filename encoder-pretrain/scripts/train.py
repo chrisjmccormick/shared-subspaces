@@ -17,27 +17,10 @@ from transformers import (
     set_seed,
 )
 
-print("\n===== DEBUG: File Context =====")
-print("Current Working Directory:", os.getcwd())
-print("Script __file__:", __file__)
-print("sys.path:")
-for p in sys.path:
-    print("  ", p)
 
-print("\nList of files in CWD:")
-for f in os.listdir():
-    print("  ", f)
 
-print("\nList of files in 'models/' relative to CWD:")
-models_path = os.path.join(os.getcwd(), "models")
-if os.path.isdir(models_path):
-    for f in os.listdir(models_path):
-        print("  ", f)
-else:
-    print("  (models/ directory not found)")
 
-# This file exists in the 'scripts' subdirectory, go up a level to find 'models'.
-from models.custom_bert import SubspaceBertForMaskedLM, SubspaceBertConfig
+from models.custom_bert import SharedSubspaceEncoderForMaskedLM, SharedSubspaceEncoderConfig
 from utils import summarize_parameters, format_size
 
 # Make sure we can import modules from the encoder-pretrain package
@@ -48,9 +31,6 @@ print("PROJECT_ROOT", PROJECT_ROOT)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-
-# Temp - Using base class for the moment.
-#from models.custom_bert import CustomBertForMaskedLM
 
 
 def parse_args():
@@ -74,12 +54,12 @@ def main():
     if "stats" not in config:
         config["stats"] = {}
 
-    # Strict key check on the model configuration.
-    valid_keys = SubspaceBertConfig.__init__.__code__.co_varnames
-    valid_keys = set(valid_keys) - {"self", "kwargs"}
-    extra_keys = set(config["model"]) - valid_keys
-    if extra_keys:
-        raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
+# Strict key check on the model configuration.
+valid_keys = SharedSubspaceEncoderConfig.__init__.__code__.co_varnames
+valid_keys = set(valid_keys) - {"self", "kwargs"}
+extra_keys = set(config["model"]) - valid_keys
+if extra_keys:
+    raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
 
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
@@ -131,10 +111,10 @@ def main():
     )
 
 
-    # Will raise TypeError, by design, if required args are missing
-    bert_config = SubspaceBertConfig(**config["model"])
-    
-    model = SubspaceBertForMaskedLM(bert_config)
+# Will raise TypeError, by design, if required args are missing
+model_cfg = SharedSubspaceEncoderConfig(**config["model"])
+
+model = SharedSubspaceEncoderForMaskedLM(model_cfg)
 
     # ================================
     #       Review Configuration
@@ -181,53 +161,53 @@ def main():
     # Format the cfg learning rate as a scientific notation string like 5e-4
     lr_str = '{:.0e}'.format(config['pre_train']['learning_rate'])
 
-    # Attention configuration
-    if bert_config.use_mla:
-        dense_str = str(bert_config.num_dense_layers) + "mha + "
+# Attention configuration
+if model_cfg.use_mla:
+    dense_str = str(model_cfg.num_dense_layers) + "mha + "
 
-        if bert_config.output_subspace:
-            o_str = "." + str(bert_config.o_lora_rank)
-        else:
-            o_str = ""
-
-        # If no output subspace is used, the dimension will show as -1.
-        attn_str = (
-            dense_str
-            + "mla."
-            + str(bert_config.q_lora_rank)
-            + "."
-            + str(bert_config.kv_lora_rank)
-            + o_str
-        )
+    if model_cfg.output_subspace:
+        o_str = "." + str(model_cfg.o_latent_dim)
     else:
-        attn_str = "mha"
+        o_str = ""
 
-    # MLP Configuration
-    if bert_config.ffn_decompose:
-        dense_str = (
-            str(bert_config.num_dense_layers)
-            + "mlp."
-            + str(bert_config.intermediate_size)
-            + " + "
-        )
-
-        mlp_str = (
-            dense_str
-            + "dcmp."
-            + str(bert_config.intermediate_size)
-            + "."
-            + str(bert_config.ffn_rank)
-        )
-    else:
-        mlp_str = "mlp." + str(bert_config.intermediate_size)
-
-    # Final run name
-    run_name = (
-        f"{config['stats']['total_elements']} - {attn_str} - {mlp_str} - "
-        f"h{bert_config.hidden_size} - l{bert_config.num_hidden_layers} - "
-        f"bs{config['pre_train']['train_batch_size']} - lr{lr_str} - "
-        f"seq{config['pre_train']['max_seq_length']}"
+    # If no output subspace is used, the dimension will show as -1.
+    attn_str = (
+        dense_str
+        + "mla."
+        + str(model_cfg.q_latent_dim)
+        + "."
+        + str(model_cfg.kv_latent_dim)
+        + o_str
     )
+else:
+    attn_str = "mha"
+
+# MLP Configuration
+if model_cfg.ffn_decompose:
+    dense_str = (
+        str(model_cfg.num_dense_layers)
+        + "mlp."
+        + str(model_cfg.intermediate_size)
+        + " + "
+    )
+
+    mlp_str = (
+        dense_str
+        + "dcmp."
+        + str(model_cfg.intermediate_size)
+        + "."
+        + str(model_cfg.ffn_rank)
+    )
+else:
+    mlp_str = "mlp." + str(model_cfg.intermediate_size)
+
+# Final run name
+run_name = (
+    f"{config['stats']['total_elements']} - {attn_str} - {mlp_str} - "
+    f"h{model_cfg.hidden_size} - l{model_cfg.num_hidden_layers} - "
+    f"bs{config['pre_train']['train_batch_size']} - lr{lr_str} - "
+    f"seq{config['pre_train']['max_seq_length']}"
+)
 
     config['pre_train']["run_name"] = run_name
     
