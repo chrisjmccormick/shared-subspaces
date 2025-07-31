@@ -24,41 +24,22 @@ from models.shared_subspace_encoder import (
     SharedSubspaceEncoderLayer,
 )
 
-# Clean up the temporary placeholders
 
+# Load the baseline config file.    
+with open('test_config.json') as f:
+    config = json.load(f)
 
-def make_config(output_subspace=False, **overrides):
-    cfg = SharedSubspaceEncoderConfig(
-        vocab_size=100,
-        hidden_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=4,
-        intermediate_size=64,
-        head_dim=8,
-        q_latent_dim=8,
-        kv_latent_dim=8,
-        v_head_dim=8,
-        attention_dropout_prob=0.0,
-        hidden_dropout_prob=0.0,
-        num_dense_layers=0,
-        attention_bias=False,
-        rope_theta=10000.0,
-        rope_dims=4,
-        rope_scaling=None,
-        rms_norm_eps=1e-6,
-        eps=1e-5,
-        initializer_range=0.02,
-        output_subspace=output_subspace,
-        o_latent_dim=16,
-        **overrides,
-    )
+# Strict key check on the model configuration.
+valid_keys = SharedSubspaceEncoderConfig.__init__.__code__.co_varnames
+valid_keys = set(valid_keys) - {"self", "kwargs"}
+extra_keys = set(config["model"]) - valid_keys
+if extra_keys:
+    raise ValueError(f"Unknown keys in config: {sorted(extra_keys)}")
 
-    # Manually apply overrides for attributes not handled by the config
-    for k, v in overrides.items():
-        setattr(cfg, k, v)
+# Will raise TypeError, by design, if required args are missing
+model_cfg = SharedSubspaceEncoderConfig(**config["model"])
 
-    return cfg
-
+# TODO - Update tests to use `model_cfg` 
 
 def test_config_defaults():
     cfg = SharedSubspaceEncoderConfig()
