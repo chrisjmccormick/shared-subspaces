@@ -235,6 +235,65 @@ def rotate_half(x):
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
+
+class RotaryEmbedding(nn.Module):
+    """Precompute RoPE embeddings and store them as buffers."""
+
+    def __init__(self, config: SharedSubspaceEncoderConfig) -> None:
+        super().__init__()
+
+        dim = config.rope_dims
+        seq_len = config.max_position_embeddings
+
+        # ------------------------------
+        # Compute inverse frequencies
+        # ------------------------------
+        # Shape: [dim // 2]
+        #   inv_freq[i] = 1 / (theta^(i / dim))
+        inv_freq = 1.0 / (
+            config.rope_theta
+            ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
+        )
+
+        # ------------------------------
+        # Compute position indices
+        # ------------------------------
+        # Shape: [seq_len]
+        t = torch.arange(seq_len, dtype=torch.float32)
+
+        # ------------------------------
+        # Outer product: [seq_len, dim // 2]
+        # Each row i contains: t[i] * inv_freq
+        # ------------------------------
+        freqs = torch.outer(t, inv_freq)
+
+        # ------------------------------
+        # Duplicate for interleaved sin/cos: [seq_len, dim]
+        # This matches the common format: [sin_0, cos_0, sin_1, cos_1, ...]
+        # ------------------------------
+        emb = torch.cat((freqs, freqs), dim=-1)
+
+        # ------------------------------
+        # Register cos/sin as buffers
+        # - Stored in float32
+        # - Will be moved to correct device/dtype via model.to(...)
+        # - Not saved with state_dict (persistent=False)
+        # ------------------------------
+        self.register_buffer("cos", emb.cos(), persistent=False)
+        self.register_buffer("sin", emb.sin(), persistent=False)
+
+    def forward(self, position_ids: torch.LongTensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns precomputed cos/sin embeddings for the given position IDs.
+
+        Args:
+            position_ids: Tensor of shape [batch, seq_len] or [seq_len]
+
+        Returns:
+            cos: [seq_len, rope_dim]
+            sin: [seq_len, rope_dim]
+        """
+        return self.cos[position_ids], self.sin[position_ids]
     
 
 class MultiheadLatentAttention(nn.Module):
