@@ -44,6 +44,8 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
         q_lora_rank: int | None = None,
         kv_lora_rank: int | None = None,
         head_dim: int | None = None,
+        vocab_decompose: bool = False,
+        vocab_rank: int = 128,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -59,6 +61,8 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
         self.q_lora_rank = q_lora_rank
         self.kv_lora_rank = kv_lora_rank
         self.head_dim = head_dim
+        self.vocab_decompose = vocab_decompose
+        self.vocab_rank = vocab_rank
 
         # Explicitly mark this as an encoder-only architecture
         self.is_decoder = False
@@ -121,7 +125,18 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
 
     def __init__(self, config: SharedSubspaceEncoderConfig) -> None:
         super().__init__(config)
-        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
+
+        if config.vocab_decompose:
+            embed_dim = config.vocab_rank
+        else:
+            embed_dim = config.hidden_size
+
+        self.vocab_embed = nn.Embedding(config.vocab_size, embed_dim)
+
+        self.embed_proj = None
+        if config.vocab_decompose:
+            self.embed_proj = nn.Linear(embed_dim, config.hidden_size, bias=False)
+
         # RoPE will supply position information; we intentionally omit a learned
         # position embedding table.
         self.layers = nn.ModuleList(
@@ -131,10 +146,23 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
         self.post_init()
 
     def get_input_embeddings(self) -> nn.Embedding:
-        return self.embed_tokens
+        return self.vocab_embed
 
     def set_input_embeddings(self, value: nn.Module) -> None:
-        self.embed_tokens = value
+        self.vocab_embed = value
+
+    def embed(self, input_ids: torch.LongTensor) -> torch.Tensor:
+        """Return token embeddings projected to model space."""
+        x = self.vocab_embed(input_ids)
+        if self.embed_proj is not None:
+            x = self.embed_proj(x)
+        return x
+
+    def shared_vocab_matrix(self) -> torch.Tensor:
+        """Return the tied input/output embedding matrix."""
+        if self.embed_proj is None:
+            return self.vocab_embed.weight.T
+        return self.embed_proj.weight @ self.vocab_embed.weight.T
 
     def forward(
         self,
