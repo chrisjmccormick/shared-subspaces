@@ -71,6 +71,7 @@ class CustomTrainer(Trainer):
             pin_memory=self.config.get("pre_train", {}).get("pin_memory", True),
         )
 
+    '''
     def training_step(self, model, inputs, num_samples):
         """Detach loss and only convert to scalar on logging steps."""
         loss = super().training_step(model, inputs, num_samples)
@@ -83,7 +84,7 @@ class CustomTrainer(Trainer):
             self.loss_scalar = loss.detach().item()
 
         return loss
-
+    '''
 
 def main():
     args = parse_args()
@@ -100,7 +101,7 @@ def main():
         config["stats"] = {}
 
     # Default max_steps for profiling; keeps runs short unless overridden
-    config["pre_train"]["max_steps"] = config["pre_train"].get("max_steps", 50)
+    config["pre_train"]["max_steps"] = 200 #config["pre_train"].get("max_steps", 50)
 
     print("Transformers version:", transformers.__version__)  # Helpful sanity check
 
@@ -290,7 +291,9 @@ def main():
         eval_strategy="steps", 
         eval_steps=config["pre_train"].get("eval_steps", 500),  # Default to 500
         
-        logging_steps=100,
+        # Let's sanity check that this is actually the problem.
+        #logging_steps=100,
+        logging_steps=float('inf'),
         
         # Checkpoint saving
         save_steps=500,
