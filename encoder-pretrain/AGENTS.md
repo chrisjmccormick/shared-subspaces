@@ -249,3 +249,73 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 - We are building the experiment as python scripts, and these are being run from within a Google Colab Notebook.
 - The Colab instance is connected to a 40GB A100.
 
+
+# 4. Code Style Guide
+
+This repository follows several conventions for documenting tensor shapes and organizing attention code.
+
+## Symbolic Tensor Dimensions
+
+At the beginning of each function, map symbolic dimension names to their meanings:
+
+```
+# === Tensor Dimension Symbols ===
+# B: batch_size     — number of samples in the batch
+# T: seq_len        — number of tokens per sample
+# H: n_heads        — number of attention heads
+# D: hidden_dim     — model embedding size
+# Dh: head_dim      — per-head projection dimension
+# Dc: compress_dim  — dimension of latent (e.g., LoRA or MLA) subspace
+# R: rope_dim       — rotary positional embedding size
+# C: cache_dim      — compressed key/value dimension
+```
+
+## Block Commenting
+
+Use large section headers for major steps, preceded by a short description of the purpose of that block.
+
+```
+# ==============================
+#     Query Compression
+# ==============================
+```
+
+## Shape Comments
+
+Place comments above an operation detailing input and output shapes.
+
+```
+# Linear projection of queries
+# Input:  x [B, T, D]
+# Output: q [B, T, H * Dh]
+q = self.q_proj(x)
+```
+
+For reshape or view operations, indicate the transformation with arrows:
+
+```
+# Reshape: [B, T, H * Dh] → [B, T, H, Dh]
+q = q.view(B, T, H, Dh)
+```
+
+## Slice Assignments
+
+Prefer multi-line slice assignments so that each side can have shape comments.
+
+## Einsum Template
+
+When using `einsum`, provide the symbolic string, shapes of inputs, and the meaning of the operation.
+
+```
+# === Project query into key space ===
+# Operation:
+#   einsum("bshd,hdc->bshc", q_nope, W^K)
+# Inputs:
+#   q_nope: [B, S, H, Dq]
+#   W^K:    [H, Dq, C]
+# Output:
+#   q_proj: [B, S, H, C]
+# Dropped dim: Dq
+# Broadcasted: H
+```
+
