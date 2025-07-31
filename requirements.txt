@@ -1,5 +1,8 @@
 transformers>=4.40.0
 datasets
-accelerate
+scikit-learn
 wandb
-torch
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.2+cpu
+tqdm
+pytest
