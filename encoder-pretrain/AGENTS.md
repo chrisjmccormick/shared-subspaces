@@ -1,4 +1,4 @@
-1. Overview
+# 1. Overview
 -------------
 
 We are evaluating the viability of modifications to the Transformer architecture relating to shared subspaces. 
@@ -11,12 +11,22 @@ The current topics to explore, in priority order:
 
 3. The addition of a shared latent space on the word embeddings.
 
-1.1. Goals
-----------
+# 1.1. Goals
+------------
 
 The plan is to eventually partner with a company or institution to fully evaluate these techniques and publish on them.
 
 The purspose of this current project, then, is to do smaller scale experiments aimed at demonstrating the potential (provided it's there) in order to attract outside interest. 
+
+# 1.2. Pivoting
+---------------
+
+We've been working on the "custom_bert.py" model, where we tried to build this project using stripped down versions of classes from huggingface transformers. 
+We're pivoting toward building a new, lighter weight implementation from scratch, in /encoder-pretrain/models/shared_subspace_encoder.py
+It's a research prototype, meant to focus on communicating a new idea. The code is explanatory.
+We'll keep around the original classes for now as reference.
+The intended features are the same, except now we are focusing on strictly a decoder model. 
+We still want it to be compatible with huggingface transformers.
 
 
 # 2. Background
@@ -239,22 +249,3 @@ Initial from-scratch pre-training runs on a small Vision Transformer model on CI
 - We are building the experiment as python scripts, and these are being run from within a Google Colab Notebook.
 - The Colab instance is connected to a 40GB A100.
 
-
-# 4. Repository Organization & Status
--------------------------------------
-
-- We are working inside /encoder-pretrain/.  
-    - models/custom_bert.py - This is the BERT implementation copied directly from huggingface Transformers with minimal changes (so far).
-	    - We've added (or started to add?) the ability to use MLA in place of standard attention.
-	- models/layers/mla_attention.py - This is the MLA implementation (named "DeepSeekV3Attention") also copied directly from transformers with minimal changes.
-  	    - We stripped it down to just the attention implementation, removing the rest of the DeepSeek-V3 model definition. You can find the rest of model under `\references\` if needed.
-	    - We've added the proposed decomposition of $W^O$.
-  
-
-# 5. Conventions
-----------------
-
-- Do not try to maintain backwards compatibility, e.g., with old configuration files. This project is still in early development.
-- As a principle, assume that required configuration settings are present, and just allow the code to throw an exception if they're missing. This will help us catch bugs.
-    - Rather than infer what things should be, use asserts to identify when a configuration is incorrect.
-- Always comment your code to explain the reason for your changes.
