@@ -23,16 +23,16 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
         intermediate_size: int = 3072,
         max_position_embeddings: int = 2048,
         use_mla: bool = False,
-        q_lora_rank: int | None = None,  # TODO - let's move away from 'lora'
-        kv_lora_rank: int | None = None,
-        o_lora_rank: int | None = None,
+        q_latent_dim: int | None = None,
+        kv_latent_dim: int | None = None,
+        o_latent_dim: int | None = None,
         head_dim: int | None = None,
         vocab_decompose: bool = False,
         vocab_rank: int = 128,
         ffn_decompose: bool = False,
-        ffn_rank: bool = False
-        
-        **kwargs,
+        ffn_rank: bool = False,
+
+        **kwargs
     ) -> None:
         super().__init__(**kwargs)
 
@@ -44,13 +44,14 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
         self.max_position_embeddings = max_position_embeddings
 
         self.use_mla = use_mla
-        self.q_lora_rank = q_lora_rank
-        self.kv_lora_rank = kv_lora_rank
+        self.q_latent_dim = q_latent_dim
+        self.kv_latent_dim = kv_latent_dim
         self.head_dim = head_dim
         self.vocab_decompose = vocab_decompose
         self.vocab_rank = vocab_rank
+        self.o_latent_dim = o_latent_dim
 
-        # TODO - FFN decompose, rank, o_lora_rank, 
+        # TODO - FFN decompose, rank, o_latent_dim,
         
         # TODO - Is this needed by huggingface?
         # Explicitly mark this as an encoder-only architecture
@@ -258,14 +259,12 @@ class MultiheadLatentAttention(nn.Module):
         self.rope_theta = config.rope_theta
         self.rope_dims = config.rope_dims # New / Add
 
-        self.q_lora_rank = config.q_lora_rank
-        self.kv_lora_rank = config.kv_lora_rank
+        self.q_latent_dim = config.q_latent_dim
+        self.kv_latent_dim = config.kv_latent_dim
 
         # Explicit dimensional attributes for clarity
         self.hidden_size = config.hidden_size
         self.v_head_dim = config.v_head_dim
-        self.q_lora_dim = config.q_lora_rank
-        self.kv_lora_dim = config.kv_lora_rank
 
         #self.qk_rope_head_dim = config.qk_rope_head_dim -- Remove
         #self.v_head_dim = config.v_head_dim # Remove
@@ -305,26 +304,26 @@ class MultiheadLatentAttention(nn.Module):
             # Input latent projections
             self.qkv_a_proj = nn.Linear(
                 config.hidden_size,
-                self.q_lora_rank + self.kv_lora_rank,
+                self.q_latent_dim + self.kv_latent_dim,
                 bias=config.attention_bias,
             )
 
             # TODO - Decide whether to share or split.
             self.qkv_a_layernorm = DeepseekV3RMSNorm(
-                self.q_lora_rank + self.kv_lora_rank,
+                self.q_latent_dim + self.kv_latent_dim,
                 eps=config.rms_norm_eps,
             )
 
             # Query heads
             self.q_b_proj = nn.Linear(
-                config.q_lora_rank, 
-                self.num_heads * self.head_dim, 
+                config.q_latent_dim,
+                self.num_heads * self.head_dim,
                 bias=False # TODO
             )
 
             # Key and Value heads, concatenated
             self.kv_b_proj = nn.Linear(
-                self.kv_lora_rank,
+                self.kv_latent_dim,
                 self.num_heads * (self.head_dim * 2),
                 bias=False,
             )
@@ -341,14 +340,14 @@ class MultiheadLatentAttention(nn.Module):
             #     Output Subspace
             # ==========================
 
-            self.o_lora_rank = config.o_lora_rank 
+            self.o_latent_dim = config.o_latent_dim
 
             # Per-head output projections
             # (Similar to original W^O, but projects the scored value vectors
             #  into a latent space instead of back to the model)
             self.o_a_proj = nn.Linear(
                 self.num_heads * self.v_head_dim,
-                self.o_lora_rank, 
+                self.o_latent_dim,
                 bias=False
             )
 
@@ -366,7 +365,7 @@ class MultiheadLatentAttention(nn.Module):
             #   - I have not tried applying it to the output of o_b.
             # 
             #self.o_a_layernorm = DeepseekV3RMSNorm(
-            #    self.o_lora_rank, 
+            #    self.o_latent_dim,
             #    eps=config.rms_norm_eps
             #)
 
@@ -376,8 +375,8 @@ class MultiheadLatentAttention(nn.Module):
             # Then we project their combined outputs (a single vector per token)
             # back to model space via `o_b_proj`.
             self.o_b_proj = nn.Linear(
-                self.o_lora_rank, 
-                self.hidden_size, 
+                self.o_latent_dim,
+                self.hidden_size,
                 bias=config.attention_bias
             )
    
@@ -441,7 +440,7 @@ class MultiheadLatentAttention(nn.Module):
         # hidden_states: [B, T, D]
         B, T = hidden_states.shape[:2]
         H, Dh = self.num_heads, self.head_dim
-        Dc_q, Dc_kv = self.q_lora_dim, self.kv_lora_dim
+        Dc_q, Dc_kv = self.q_latent_dim, self.kv_latent_dim
         
 
         # ==============================
@@ -469,7 +468,7 @@ class MultiheadLatentAttention(nn.Module):
             #       q_latents  [B, T, Dc_q]  TODO
             #       kv_latents [B, T, Dc_kv]  TODO
             q_latents, kv_latents = torch.split(
-                input_latents, [self.q_lora_dim, self.kv_lora_dim], dim=-1
+                input_latents, [self.q_latent_dim, self.kv_latent_dim], dim=-1
             )
 
             # Linear projection of query latents

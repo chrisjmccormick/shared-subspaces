@@ -34,8 +34,8 @@ def make_config(output_subspace=False, **overrides):
         num_attention_heads=4,
         intermediate_size=64,
         head_dim=8,
-        q_lora_rank=8,
-        kv_lora_rank=8,
+        q_latent_dim=8,
+        kv_latent_dim=8,
         v_head_dim=8,
         attention_dropout_prob=0.0,
         num_dense_layers=0,
@@ -46,7 +46,7 @@ def make_config(output_subspace=False, **overrides):
         rms_norm_eps=1e-6,
         initializer_range=0.02,
         output_subspace=output_subspace,
-        o_lora_rank=16,
+        o_latent_dim=16,
         **overrides,
     )
     return cfg
@@ -62,7 +62,7 @@ def test_config_defaults():
 def test_model_initialization():
     cfg = make_config()
     model = SharedSubspaceEncoderModel(cfg)
-    assert model.embed_tokens.weight.shape == (cfg.vocab_size, cfg.hidden_size)
+    assert model.vocab_embed.weight.shape == (cfg.vocab_size, cfg.hidden_size)
     assert len(model.layers) == cfg.num_hidden_layers
 
 
@@ -77,6 +77,6 @@ def test_forward_not_implemented():
 def test_mla_init_with_output_latent():
     cfg = make_config(output_subspace=True)
     attn = MultiheadLatentAttention(cfg, layer_idx=0)
-    assert attn.o_a_proj.weight.shape == (cfg.o_lora_rank, cfg.num_attention_heads * cfg.v_head_dim)
-    assert attn.o_b_proj.weight.shape == (cfg.hidden_size, cfg.o_lora_rank)
+    assert attn.o_a_proj.weight.shape == (cfg.o_latent_dim, cfg.num_attention_heads * cfg.v_head_dim)
+    assert attn.o_b_proj.weight.shape == (cfg.hidden_size, cfg.o_latent_dim)
 
