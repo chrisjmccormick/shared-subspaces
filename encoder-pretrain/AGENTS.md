@@ -170,3 +170,9 @@ Many lines are missing / misapplying the style guide's shape definitions. I've m
 ## Full config
 
 Review `SharedSubspaceEncoderConfig` for missing properties.
+
+## Implement SharedSubspaceEncoderLayer
+
+Comment it well and fill in the comment "TODOs"
+Define one or more test cases which instantiate it and confirm that the intended objects have been created
+and that it adhered to any relevant flags. 

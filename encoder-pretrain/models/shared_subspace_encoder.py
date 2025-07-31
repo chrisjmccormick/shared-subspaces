@@ -108,7 +108,9 @@ class SharedSubspaceEncoderLayer(nn.Module):
     """
 
     def __init__(self, config: SharedSubspaceEncoderConfig, layer_idx: int) -> None:
+        
         super().__init__()
+        
         self.self_attn = MultiheadLatentAttention(config, layer_idx)
         # TODO: add MLP and layer norms
 
