@@ -1,7 +1,7 @@
 {
-  "shorthand": "mla.64.48.64, dense.2, mlp.1024, model.256, ah.8.32",
+  "shorthand": "subattn.64.48.64, dense.2, mlp.1024, model.256.lyr.6, vocab.128, ah.8.32",
   
-  "notes": "MLA, no output latent, 2 initial dense layers.",
+  "notes": "SharedSubspaceEncoder Baseline, no FFN decomposition",
   
   "model": {
   	
