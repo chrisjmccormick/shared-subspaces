@@ -21,6 +21,7 @@ from models.shared_subspace_encoder import (
     SharedSubspaceEncoderConfig,
     SharedSubspaceEncoderModel,
     MultiheadLatentAttention,
+    SharedSubspaceEncoderLayer,
 )
 
 # Clean up the temporary placeholders
@@ -38,17 +39,24 @@ def make_config(output_subspace=False, **overrides):
         kv_latent_dim=8,
         v_head_dim=8,
         attention_dropout_prob=0.0,
+        hidden_dropout_prob=0.0,
         num_dense_layers=0,
         attention_bias=False,
         rope_theta=10000.0,
         rope_dims=4,
         rope_scaling=None,
         rms_norm_eps=1e-6,
+        eps=1e-5,
         initializer_range=0.02,
         output_subspace=output_subspace,
         o_latent_dim=16,
         **overrides,
     )
+
+    # Manually apply overrides for attributes not handled by the config
+    for k, v in overrides.items():
+        setattr(cfg, k, v)
+
     return cfg
 
 
@@ -79,4 +87,35 @@ def test_mla_init_with_output_latent():
     attn = MultiheadLatentAttention(cfg, layer_idx=0)
     assert attn.o_a_proj.weight.shape == (cfg.o_latent_dim, cfg.num_attention_heads * cfg.v_head_dim)
     assert attn.o_b_proj.weight.shape == (cfg.hidden_size, cfg.o_latent_dim)
+
+
+def test_layer_initialization_dense():
+    cfg = make_config()
+    layer = SharedSubspaceEncoderLayer(cfg, layer_idx=0)
+
+    # attention block
+    assert isinstance(layer.self_attn, MultiheadLatentAttention)
+    assert layer.attn_dropout.p == cfg.hidden_dropout_prob
+    assert isinstance(layer.attn_norm, torch.nn.LayerNorm)
+
+    # dense attention uses a single output projection
+    assert hasattr(layer.self_attn, "o_proj")
+    assert not hasattr(layer.self_attn, "o_a_proj")
+
+    # dense FFN should not define shared weights
+    assert not hasattr(layer.mlp, "W_in_shared")
+
+
+def test_layer_with_subspaces():
+    cfg = make_config(output_subspace=True, ffn_decompose=True, ffn_rank=4)
+    layer = SharedSubspaceEncoderLayer(cfg, layer_idx=1)
+
+    # output subspace creates the two projection matrices
+    assert hasattr(layer.self_attn, "o_a_proj")
+    assert hasattr(layer.self_attn, "o_b_proj")
+    assert not hasattr(layer.self_attn, "o_proj")
+
+    # decomposed FFN creates shared weights
+    assert hasattr(layer.mlp, "W_in_shared")
+    assert layer.mlp.W_in_shared.weight.shape == (cfg.ffn_rank, cfg.hidden_size)
 
