@@ -1,27 +1,18 @@
 import torch
 import pytest
 import sys
-import builtins
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# The `MultiheadLatentAttention` stub references annotation types that aren't
-# included in the skeleton.  Define simple placeholders so the module can be
-# imported without raising errors during evaluation of those annotations.
-builtins.Cache = type("Cache", (), {})
-def _dummy_norm(*args, **kwargs):
-    return torch.nn.Identity()
-
-builtins.DeepseekV3RMSNorm = _dummy_norm
-
 from models.shared_subspace_encoder import (
     SharedSubspaceEncoderConfig,
     SharedSubspaceEncoderModel,
     MultiheadLatentAttention,
     SharedSubspaceEncoderLayer,
+    DeepseekV3RMSNorm
 )
 
 
