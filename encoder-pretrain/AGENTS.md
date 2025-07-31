@@ -142,3 +142,31 @@ TODO - Update with an example from the code.
 # Broadcasted: H
 ```
 
+# Tasks
+
+## Standardize on use of `latent`
+
+Update `/encoder-pretrain/models/shared_subspace_encoder.py` to change from, e.g., `q_lora_rank` to `q_latent_dim`:
+
+```python
+        #   Cq: q_latent_dim   - query latent subspace size
+        #  Ckv: kv_latent_dim  - key-value latent subspace size
+        #   Co: o_latent_dim   - output latent subspace size
+```
+
+Leave other files alone for now. 
+You can update `/encoder-pretrain/tests/test_shared_encoder.py` if this change causes errors.
+
+## Rotary Embeddings
+
+Define the RotaryEmbedding class.
+To keep everything on the GPU and avoid repeated dtype/device transfers, 
+precompute cos and sin once and cache them as buffers.
+
+## Update shape docs
+
+Many lines are missing / misapplying the style guide's shape definitions. I've marked many of these with "TODO".
+
+## Full config
+
+Review `SharedSubspaceEncoderConfig` for missing properties.
