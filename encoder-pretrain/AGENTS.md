@@ -9,7 +9,7 @@ The current topics to explore, in priority order:
 
 2. The use of MLA in tandem with decomposed FFNs, to determine whether they work better together than with standard MHA.
 
-3. The addition of a shared latent space on the word embeddings.
+3. Factorized vocabulary embeddings via a shared projection layer.
 
 # 1.1. Goals
 ------------
@@ -224,6 +224,12 @@ return attn_output, attn_weights
 
 ```
 
+## 2.5. Shared Vocabulary Subspace
+When the model hidden size is small, the vocabulary embedding matrix dominates
+the parameter count. Tokens first map to a low-rank latent vector which is then
+projected into model space through a shared linear layer. Reusing this projection for
+the output logits ties the input and output embeddings together. Set ``vocab_decompose=True``
+and adjust ``vocab_rank`` to enable this factorization.
 
 # 3. Experiments
 ----------------
