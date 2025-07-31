@@ -201,12 +201,17 @@ class MultiheadLatentAttention(nn.Module):
         # R: rope_dim       — rotary positional embedding size
         # C: cache_dim      — compressed key/value dimension
 
+        # Input token embeddings
+        # hidden_states: [B, T, D]
         B, T = hidden_states.shape[:2]
+        H, Dh = self.num_heads, self.head_dim
+        Dc_q, Dc_kv = self.q_lora_dim, self.kv_lora_dim
         
 
         # ==============================
         #     QKV Head Projections
         # ==============================
+        # Project tokens into per-head query, key, and value vectors
 
         # If this layer uses latent projections,
         if self.latent_spaces:
