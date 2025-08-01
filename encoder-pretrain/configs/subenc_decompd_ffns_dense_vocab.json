@@ -1,0 +1,71 @@
+{
+  "shorthand": "subattn.64.48.64, dense.2, mlp.128.896, model.384.lyr.12, vocab.384, ah.6.64.32",
+  
+  "notes": "SharedSubspaceEncoder Baseline, decomposed FFNs, making vocab dense",
+  
+  "model": {
+  	
+	"hidden_size":          384,
+    "num_hidden_layers":    12,
+    "intermediate_size":    896,
+    
+	"hidden_dropout_prob":  0.1,
+    "attention_dropout_prob": 0.1,
+    "classifier_dropout":   null,
+        
+    "initializer_range":    0.02,
+    "layer_norm_eps":       1e-12,
+    "rms_norm_eps":         1e-6,
+
+    "vocab_size":           30522,
+	"rope_theta":           10000.0,
+    "rope_scaling":         null,
+	"max_position_embeddings":  128,
+
+	"num_dense_layers":   2,	
+    "q_latent_dim":       64,	
+    "kv_latent_dim":      48,
+	
+	"num_attention_heads":  6,
+	"head_dim":             64,
+	"rope_dims":            16,
+	"attention_bias":       false,	
+	
+	"output_subspace":    true,
+    "o_latent_dim":       64,
+	
+    "attention_backend": "sdpa",
+
+    "ffn_decompose":     true,
+    "ffn_rank":          128,
+	
+	"vocab_subspace":   false,
+	"vocab_rank":        384
+  },
+  
+  "pre_train": {
+    "output_dir":        "checkpoints/subenc_decomp_ffns",
+	"seed":              42,
+	
+    "train_batch_size":  64,
+    "learning_rate":     5e-4,
+    "num_train_epochs":  3,
+	
+    "mlm_probability":   0.15,
+    "dataset_name":      "wikitext",
+    "dataset_config":    "wikitext-2-raw-v1",
+    
+	"max_seq_length":    128,
+	"eval_batch_size":   64,
+	
+    "fp16":              true
+  },
+  
+  "fine_tune": {
+    "task":         "sst2",
+	"batch_size":   16,
+	"lr":           2e-5,
+	"epochs":       3,
+	"max_length":   128
+  }
+}
