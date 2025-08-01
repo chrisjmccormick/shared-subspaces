@@ -1,5 +1,5 @@
 {
-  "shorthand": "subattn.64.48.64, dense.2, mlp.1024, model.256.lyr.6, vocab.128, ah.8.32",
+  "shorthand": "subattn.64.48.64, dense.all, ffn.1024, model.256.lyr.6, vocab.256.128, ah.8.32",
   
   "notes": "SharedSubspaceEncoder Baseline, no FFN decomposition",
   
@@ -44,7 +44,7 @@
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/mla_output_w_dense",
+    "output_dir":        "checkpoints/subenc_dense_ffns",
 	"seed":              42,
 	
     "train_batch_size":  64,
