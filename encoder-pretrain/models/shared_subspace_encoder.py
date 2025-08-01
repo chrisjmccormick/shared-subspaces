@@ -40,7 +40,7 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
     - layer_norm_eps (`float`) — Epsilon for LayerNorm.
     - classifier_dropout (`float` or None) — Dropout for final classifier.
 
-    - vocab_decompose
+    - vocab_subspace
     _ vocab_rank
 
     ----------------------
@@ -90,7 +90,7 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
         layer_norm_eps=1e-12,
         classifier_dropout=None,
 
-        vocab_decompose=False,
+        vocab_subspace=False,
         vocab_rank=None,
 
         # === Multi-Head Latent Attention ===
@@ -128,7 +128,7 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.classifier_dropout = classifier_dropout
 
-        self.vocab_decompose = vocab_decompose
+        self.vocab_subspace = vocab_subspace
         self.vocab_rank = vocab_rank
 
         # === MLA ===
@@ -332,7 +332,7 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
         
         # If we're decomposing the token embeddings,
         # TODO - Rename to vocab_subspace.
-        if config.vocab_decompose:
+        if config.vocab_subspace:
 
             # Create the embedding table. Vocabulary embeddings are learned
             # in a lower dimensional latent space.

@@ -38,7 +38,7 @@
     "ffn_decompose":     false,
     "ffn_rank":          null,
 	
-	"vocab_decompose":   true,
+	"vocab_subspace":   true,
 	"vocab_rank":        128
   },
   

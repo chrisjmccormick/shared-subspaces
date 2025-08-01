@@ -1,6 +1,8 @@
 import torch
 import pytest
 import sys
+import json
+import copy
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +32,15 @@ if extra_keys:
 # Will raise TypeError, by design, if required args are missing
 model_cfg = SharedSubspaceEncoderConfig(**config["model"])
 
-# TODO - Update tests to use `model_cfg` 
+def make_config(**overrides):
+    cfg = copy.deepcopy(model_cfg)
+    cfg.attention_backend = "eager"
+    cfg._attn_implementation = "eager"
+    cfg.output_subspace = False
+    cfg.vocab_subspace = False
+    for k, v in overrides.items():
+        setattr(cfg, k, v)
+    return cfg
 
 def test_config_defaults():
     cfg = SharedSubspaceEncoderConfig()
