@@ -250,15 +250,8 @@ class SharedSubspaceEncoderLayer(nn.Module):
         
         super().__init__()
 
+        # 
         self.self_attn = MultiheadLatentAttention(config, layer_idx)
-
-        # Ensure optional FFN flags exist for SubspaceFeedForward
-        if not hasattr(config, "ffn_decompose"):
-            config.ffn_decompose = False
-        if not hasattr(config, "hidden_dropout_prob"):
-            config.hidden_dropout_prob = 0.0
-        if not hasattr(config, "eps"):
-            config.eps = 1e-5
 
         # Feed-forward network used after attention
         self.mlp = SubspaceFeedForward(config)
@@ -279,6 +272,7 @@ class SharedSubspaceEncoderLayer(nn.Module):
         position_embeddings: torch.Tensor,
         attention_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
+        
         # === Tensor Dimension Symbols ===
         #  B: batch_size    — number of samples in the batch
         #  T: seq_len       — number of tokens per sample
@@ -294,6 +288,9 @@ class SharedSubspaceEncoderLayer(nn.Module):
             position_embeddings,
             attention_mask,
         )
+
+        # TODO - Make sure we're following modern best practices here, not just
+        #        copying BERT. Pretty sure DS-V3 uses input norms rather than this.
 
         attn_out = self.attn_dropout(attn_out)
         hidden_states = self.attn_norm(attn_out + residual)
@@ -314,8 +311,13 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
         - All of the **Layer objects.
       - Provides interface to vocab embeddings.
       - Executes the whole model in `forward`.   
+      
+      TODO / Note - The projection needs to be retained for creating the
+      residual stream, but otherwise can be fused into the attention input
+      heads after training. Or maybe the layer 0 attention heads should have
+      a different input size from the start.
+      
     """
-    
 
     def __init__(self, config: SharedSubspaceEncoderConfig) -> None:
         super().__init__(config)
@@ -323,26 +325,48 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
         # ============================
         #    Vocabulary Embeddings
         # ============================
-
-        # Decide the length of the embedding vectors.
+        # Decomposing the vocabulary (if enabled) defines a shared projection
+        # which constrains the model to store semantic information (and 
+        # whatever other static token knowledge) into a limited set of 
+        # feature directions.
         
-        # If we're decomposing them,
+        # If we're decomposing the token embeddings,
+        # TODO - Rename to vocab_subspace.
         if config.vocab_decompose:
-            # Use the requested rank.
-            embed_dim = config.vocab_rank
-        # Otherwise,
+
+            # Create the embedding table. Vocabulary embeddings are learned
+            # in a lower dimensional latent space.
+            self.vocab_embed = nn.Embedding(
+                config.vocab_size, # Number of tokens
+                config.vocab_rank  # Subspace dimension
+            )
+
+            # Create a 
+            # Selected token latents will be projected up to model size.
+            # vocab_proj has shape [vocab_rank x model_size]
+            self.vocab_proj = nn.Linear(
+                config.vocab_rank,  # Size of latents
+                config.hidden_size, # Model size
+                bias=False
+            )            
+            
+        # Otherwise, for a dense vocabulary,
         else:
-            # They're the model size.
-            embed_dim = config.hidden_size
+            # Create the dense embedding table in model space.
+            self.vocab_embed = nn.Embedding(
+                config.vocab_size,  # Number of tokens
+                config.hidden_size  # Model size
+            )
 
-        # Create the embedding table.
-        self.vocab_embed = nn.Embedding(config.vocab_size, embed_dim)
+            self.vocab_proj = None
 
-        # Create a shared projection for the vocabulary.
-        if config.vocab_decompose:
-            self.embed_proj = nn.Linear(embed_dim, config.hidden_size, bias=False)
-        #else:
-            #self.embed_proj = None  # No. Keep things brittle to expose mistakes.
+        # =====================
+        #   RoPE Embeddings
+        # =====================
+        
+        # Pre-computes the table of RoPE embeddings, leaving them in 
+        # GPU memory.
+        self.rope = RotaryEmbedding(config)                  
 
         # ===================
         #    Create Layers 
@@ -357,45 +381,39 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
                 SharedSubspaceEncoderLayer(config, i)
             )
         
+        # Wrap in torch ModuleList
         self.layers = nn.ModuleList(layers)
-                
-        self.post_init() # TODO - Some examples of what's likely here?
+        
+        # Whatever huggingface does behind the scenes...
+        self.post_init() 
 
-    # TODO - Is this necessary? Or fluff?
-    def get_input_embeddings(self) -> nn.Embedding:
-        return self.vocab_embed
+    # Agents: Do not define boilerplate helpers, e.g., get/set_input_embeddings
 
-    # TODO - Why would we be setting the vocab? Is this how it gets
-    #        loaded in from a saved checkpoint?
-    def set_input_embeddings(self, value: nn.Module) -> None:
-        self.vocab_embed = value
-
-    # TODO - Who calls this?
+    
     def embed(self, input_ids: torch.LongTensor) -> torch.Tensor:
-        """Return token embeddings projected to model space."""
+        """
+        Return token embeddings for input ids.
+        This will perform the up projection to model space if the vocabulary is
+        decomposed.
         
-        # TODO - Provide return shape.
-        x = self.vocab_embed(input_ids)
-        
-        if self.embed_proj is not None: # TODO - Use flag
-            # TODO - Define shapes x, embed_proj, output
-            x = self.embed_proj(x)
-        
-        return x
-
-    # TODO - Should this be called the output matrix?
-    #        Who calls this? Part of MLM training?
-    def shared_vocab_matrix(self) -> torch.Tensor:
-        """Return the tied input/output embedding matrix."""
-        
-        if self.embed_proj is None:  # TODO - Use the flag instead.
+        input_ids have shape [batch_size, seq_len]
+        """
             
-            return self.vocab_embed.weight.T  # TODO - Document shapes here and below.
-        # TODO!!! - Excuse me??? No. Project the residual stream through the shared projection
-        # into the lower dimensional space, then multiply with the largest single weight matrix
-        # in the whole freaking model.
-        #return self.embed_proj.weight @ self.vocab_embed.weight.T
-        return "TODO"
+        # If the vocabulary is decomposed,
+        if self.vocab_proj is not None: 
+            
+            # Retrieve the latents
+            #  input_ids: [batch_size, seq_len]
+            #          x: [batch_size, seq_len, latent_dim] 
+            x = self.vocab_embed(input_ids)
+
+            #  Project the latents back to model space and return.
+            return(self.vocab_proj(x))
+        
+        # If the vocabulary is dense,
+        else:
+            # Just return the embeddings.
+            return self.vocab_embed(input_ids)
 
     # Comment--evaluates the model on (describe expected input shape) and returns (describe)
     def forward(
@@ -404,7 +422,178 @@ class SharedSubspaceEncoderModel(SharedSubspaceEncoderPreTrainedModel):
         attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
-        raise NotImplementedError
+        """
+        Run the full encoder stack.
+
+        # TODO - the attention mask is... "additive mask (0 for keep, −inf for pad)"
+        # TODO - For coding style--don't use symbols unless it's a big, dense function.
+
+        Inputs:
+            input_ids       [batch_size, seq_len] 
+            attention_mask  [batch_size,    1,    1, seq_len] 
+
+        Returns:
+            Final encoder layer output   [batch_size, seq_len, model_size] 
+        """
+        
+        # Retrieve the token embeddings for this sequence.
+        # These are model_size, regardless of whether the vocab is decompd.
+        hidden_states = self.embed(input_ids)  
+        
+        # Retrieve the rotary position embeddings for all of the positions in
+        # our current input sequence. 
+        
+        seq_len = hidden_states.size(1)
+        
+        # Retrieves just the ones necessary for the sequence length of the
+        # input. These are vectors, two per token. Their length is the 
+        # number of head dimensions we're applying RoPE to.
+        #  Input
+        #     cos: [max_seq_len, rope_dims] 
+        #     sin: [max_seq_len, rope_dims]
+        #  Outputs:
+        #     R_cos [seq_len, rope_dims] 
+        #     R_sin [seq_len, rope_dims] 
+        R_cos = self.rope.cos[:seq_len] 
+        R_sin = self.rope.sin[:seq_len]
+        
+        # Run the model!
+        
+        # For each encoder layer,
+        for layer_i, layer in enumerate(self.layers):
+            
+            # Evaluate the layer
+            hidden_states = layer(
+                hidden_states,       # Token embeddings
+                (R_cos, R_sin),      # Rope embeddings, passed as a tuple.
+                attention_mask,      # Attn mask
+                layer_i              # Layer index, for any layer-specific behavior.
+            )
+
+        # Return the final output of the encoder stack.
+        return hidden_states
+        
+
+class SharedSubspaceEncoderForMaskedLM(SharedSubspaceEncoderPreTrainedModel):
+    """
+    The `*MaskedLM` object: 
+        - Initializes:
+            - A `*Model` object from the given config.
+            - (It doesn't create a new LM head--we just use the vocabulary)
+    """
+
+    def __init__(self, config: SharedSubspaceEncoderConfig) -> None:
+        
+        # Call the `*PreTrainedModel` init.
+        super().__init__(config)
+
+        # Create the `*Model`. Everything we need is already there.
+        self.encoder_model = SharedSubspaceEncoderModel(config)
+        
+        # Call the `*PreTrainedModel` init
+        self.post_init()
+
+    
+    def forward(
+        self,
+        input_ids: torch.LongTensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        """
+        The `labels` are token ids with the `[MASK]` token id at the masked 
+        positions, and -100 (we tell the loss function this) everywhere else.
+        The `attention_mask`...  
+        
+        Inputs:
+               input_ids: [batch_size, seq_len]
+          attention_mask: [batch_size, 1, 1, seq_len]
+                 labels : [batch_size, seq_len]
+         
+        The `logits` are the prediction scores over the vocabulary.
+        The `loss` is a scalar value... per sample in the batch? It has had
+        the mask applied to it? cross-entropy. Only when labels provided, otherwise it's...
+
+        Outputs:
+           logits: [batch_size, seq_len, vocab_size]  Predction scores over vocab
+             loss: [batch_size]? Or average over batch?
+        """
+
+        # Run the input through the whole model.
+        hidden_states = self.encoder_model(
+            input_ids,
+            attention_mask=attention_mask,
+            **kwargs, # TODO - What can be passed here?
+        )                      
+
+        # The hidden states are model size. If the vocabulary was decomposed,
+        # We need to down project, and then multiply with the vocabulary latents.
+        # Otherwise, multiply directly with the vocabulary embeddings.
+        # --- Shared projection → logits  -------------------
+        
+        if self.encoder.vocab_proj is not None:
+            #  B - batch_size
+            #  T - sequence length
+            #  D - model_size
+            #  C - latent_size
+            #  V - vocab_size
+            
+            # Linear stores the transpose of its projection, so vocab_proj
+            # is functionally [C x D], but stored as [D x C]      
+            # So the vocabulary latent space projection, W_E_proj, is [D x C]
+            W_E_proj = self.encoder.vocab_proj.weight
+            
+            # Project the tokens output by the model into the vocabulary 
+            # subspace.
+            #
+            # Inputs:
+            #    hidden_states   [B, T, D]
+            #         W_E_proj         [D, C]            
+            # Outputs:
+            #        h_latents   [B, T, C]
+            #
+            #  TODO - Fuse with the next op if beneficial.
+            h_latents = einsum('btd,dc->btc', hidden_states, W_E_proj)
+            
+            # Multiply each token latent with every vocabulary latent to 
+            # get the per-token logit scores over the vocabulary.
+            # TODO
+            #
+            # Inputs:
+            # 
+            # Outputs: 
+            #    logits  [B, T, V]
+            
+            #  TODO - next step will be to flatten--do it here if it makes sense.
+        
+        # If there's no vocabulary subspace,
+        else:
+            # TODO - Multiply the hidden states with the vocabulary.
+            #
+            # Inputs:
+            #    hidden_states   [B, T, D]
+            # Outputs: 
+            #    logits  [B, T, V]
+            pass
+            
+              
+
+        loss = None
+        if labels is not None:
+            # Flatten everything for F.cross_entropy
+            loss = F.cross_entropy(
+                logits.view(-1, self.config.vocab_size),
+                labels.view(-1),
+                ignore_index=-100,
+            )
+
+        return logits, loss
+
+
+
+
+
 
 # Helper function needed because it's called twice during RoPE,
 # but I dumped it in the comments there.
@@ -463,18 +652,10 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("sin", emb.sin(), persistent=False)
 
     def forward(self, position_ids: torch.LongTensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Returns precomputed cos/sin embeddings for the given position IDs.
-
-        Args:
-            position_ids: Tensor of shape [batch, seq_len] or [seq_len]
-
-        Returns:
-            cos: [seq_len, rope_dim]
-            sin: [seq_len, rope_dim]
-        """
-        return self.cos[position_ids], self.sin[position_ids]
-    
+        """ """
+        return None # This function is not necessary.
+        
+        
 
 class MultiheadLatentAttention(nn.Module):
     """
