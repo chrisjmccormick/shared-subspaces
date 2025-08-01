@@ -147,14 +147,6 @@ class SharedSubspaceEncoderConfig(PretrainedConfig):
 
         # === Attention backend ===
         self.attention_backend = attention_backend
-        if attention_backend == "flash":
-            self._attn_implementation = "flash_attention_2"
-        elif attention_backend == "sdpa":
-            self._attn_implementation = "sdpa"
-        elif attention_backend == "eager":
-            self._attn_implementation = "eager"
-        else:
-            raise ValueError(f"Unknown attention backend: {attention_backend}")
 
         # === Validation ===
         self._validate()

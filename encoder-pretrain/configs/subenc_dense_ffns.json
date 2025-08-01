@@ -33,7 +33,7 @@
 	"output_subspace":    true,
     "o_latent_dim":       64,
 	
-    "attention_backend": "flash",
+    "attention_backend": "flash_attention_2",
 
     "ffn_decompose":     false,
     "ffn_rank":          null,

@@ -34,10 +34,10 @@ model_cfg = SharedSubspaceEncoderConfig(**config["model"])
 
 def make_config(**overrides):
     cfg = copy.deepcopy(model_cfg)
-    cfg.attention_backend = "eager"
-    cfg._attn_implementation = "eager"
-    cfg.output_subspace = False
-    cfg.vocab_subspace = False
+
+    # If there are any issues with missing parameters, don't 
+    # solve it by setting them here--fix the code instead.
+
     for k, v in overrides.items():
         setattr(cfg, k, v)
     return cfg
