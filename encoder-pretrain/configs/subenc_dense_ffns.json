@@ -1,5 +1,5 @@
 {
-  "shorthand": "subattn.64.48.64, dense.all, ffn.1024, model.256.lyr.6, vocab.256.128, ah.8.32",
+  "shorthand": "subattn.64.48.64, dense.2, ffn.1024, model.256.lyr.6, vocab.256.128, ah.8.32.r16",
   
   "notes": "SharedSubspaceEncoder Baseline, no FFN decomposition",
   
@@ -34,7 +34,7 @@
 	"output_subspace":    true,
     "o_latent_dim":       64,
 	
-    "attention_backend": "flash_attention_2",
+    "attention_backend": "sdpa",
 
     "ffn_decompose":     false,
     "ffn_rank":          null,
