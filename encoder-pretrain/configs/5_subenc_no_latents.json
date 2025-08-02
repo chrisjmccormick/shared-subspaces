@@ -1,7 +1,7 @@
 {
-  "shorthand": "attn, dense.12, mlp.896, model.384.lyr.12, vocab.384, ah.6.64.32",
+  "shorthand": "attn, dense.12, mlp.896, model.384.lyr.12, vocab.384, ah.6.64.*32",
   
-  "notes": "Dense FFNs, Dense Vocabs, No Latents at All",
+  "notes": "Dense FFNs, Dense Vocabs, No Latents at All, fixed rope dims",
   
   "model": {
   	
@@ -28,7 +28,7 @@
 	
 	"num_attention_heads":  6,
 	"head_dim":             64,
-	"rope_dims":            16,
+	"rope_dims":            32,
 	"attention_bias":       false,	
 	
 	"output_subspace":    false,
