@@ -44,7 +44,7 @@
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/1a_subenc_dense_ffns",
+    "output_dir":        "checkpoints/subenc_dense_ffns",
 	"seed":              42,
 	
     "train_batch_size":  64,
