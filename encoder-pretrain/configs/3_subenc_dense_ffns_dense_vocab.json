@@ -1,7 +1,7 @@
 {
-  "shorthand": "subattn.64.48.64, dense.2, mlp.128.896, model.384.lyr.12, vocab.384, ah.6.64.32",
+  "shorthand": "subattn.64.48.64, dense.2, mlp.896, model.384.lyr.12, vocab.384, ah.6.64.32",
   
-  "notes": "SharedSubspaceEncoder Baseline, decomposed FFNs, making vocab dense",
+  "notes": "Dense FFNs, Dense Vocab, 2x dense MHA. Fixing rope_dims and maybe ffns",
   
   "model": {
   	
@@ -22,13 +22,13 @@
     "rope_scaling":         null,
 	"max_position_embeddings":  128,
 
-	"num_dense_layers":   12,	
+	"num_dense_layers":    2,	
     "q_latent_dim":       64,	
     "kv_latent_dim":      48,
 	
 	"num_attention_heads":  6,
 	"head_dim":             64,
-	"rope_dims":            16,
+	"rope_dims":            32,
 	"attention_bias":       false,	
 	
 	"output_subspace":    true,
@@ -36,8 +36,8 @@
 	
     "attention_backend": "sdpa",
 
-    "ffn_decompose":     true,
-    "ffn_rank":          128,
+    "ffn_decompose":     false,
+    "ffn_rank":          896,
 	
 	"vocab_subspace":   false,
 	"vocab_rank":        384
