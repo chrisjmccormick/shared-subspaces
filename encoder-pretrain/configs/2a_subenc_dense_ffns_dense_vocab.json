@@ -1,7 +1,7 @@
 {
-  "shorthand": "subattn.64.48.64, dense.2, ffn.1024, model.256.lyr.6, vocab.256.128, ah.8.32.r16",
+  "shorthand": "subattn.64.48.64, dense.2, ffn.1024, model.256.lyr.6, vocab.256, ah.8.32.r16",
   
-  "notes": "SharedSubspaceEncoder Baseline, no FFN decomposition",
+  "notes": "Dense FFNs, Dense Vocab",
   
   "model": {
   	
@@ -39,12 +39,12 @@
     "ffn_decompose":     false,
     "ffn_rank":          null,
 	
-	"vocab_subspace":   true,
-	"vocab_rank":        128
+	"vocab_subspace":   false,
+	"vocab_rank":        256
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/subenc_dense_ffns",
+    "output_dir":        "checkpoints/2a_subenc_dense_ffns_dense_vocab",
 	"seed":              42,
 	
     "train_batch_size":  64,
