@@ -58,14 +58,24 @@
 	"max_seq_length":    128,
 	"eval_batch_size":   64,
 	
+	"run_link2": "https://wandb.ai/chrismccormick/encoder-pretrain/runs/yt330xdk",
+	"run_name2": "9.16M - subattn.64.48.64, dense.2, ffn.1024, model.256.lyr.6, vocab.256.128, ah.8.32.r16",
+	
     "fp16":              true
   },
+  
+  "stats": {
+	"total_elements": "9.16M",
+    "total_elems_num": 	9609408,
+	
+  }
   
   "fine_tune": {
     "task":         "sst2",
 	"batch_size":   16,
 	"lr":           2e-5,
 	"epochs":       3,
-	"max_length":   128
+	"max_length":   128,
+	"run_link":     "https://wandb.ai/chrismccormick/encoder-pretrain-sst2/runs/21sq2jf3"
   }
 }
