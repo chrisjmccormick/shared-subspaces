@@ -1,14 +1,3 @@
-"""
-# ▂▂▂▂▂▂▂▂▂▂▂▂
-
-# Fine-Tune.py (Refactored with HuggingFace Trainer)
-"""
-
-"""Fine-tune a pretrained encoder on the SST-2 task. The original script
-assumed a fixed checkpoint directory. We now accept a config file on the
-command line so the script can locate the appropriate `output_dir` created
-during pretraining."""
-
 import os
 
 # Disable tensorflow to avoid noisy warnings
@@ -157,7 +146,7 @@ def main():
 
     training_args = TrainingArguments(
         
-        #output_dir=f"./results/{run_name}",  # TODO....
+        #output_dir=f"./results/{run_name}",  # This defaults to 'results'
         
         run_name=run_name,
 
@@ -214,22 +203,14 @@ def main():
     # We'll use a try / finally block to ensure wandb.finish() is called.
     try:
         trainer.train()
-    
-        # ======================
-        #   Final Evaluation
-        # ======================
-        
+
+        # Evaluate the trained model on the "test" set
+        # (Not really necessary, wandb seems to do the same.)
         print("\n--- Evaluating on Test Set ---")
         test_results = trainer.predict(test_dataset)
+        print(f"Test Accuracy: {test_results.metrics['test_accuracy']:.4f}")
 
-        # The predict output contains metrics, which we can log and print.
-        # We rename them to distinguish from validation metrics in W&B.
-        final_test_metrics = {
-            "final_test_accuracy": test_results.metrics["test_accuracy"]
-        }
-        wandb.log(final_test_metrics)
-        print(f"[FINAL] Test Accuracy: {final_test_metrics['final_test_accuracy']:.4f}")
-
+        # Record the fine-tuning run with the checkpoint.
         full_cfg["fine_tune"]["run_id"] = wandb.run.id
         full_cfg["fine_tune"]["run_url"] = wandb.run.url
 
