@@ -69,7 +69,7 @@ def main(config_path: str):
     if "stats" not in full_cfg:
         full_cfg["stats"] = {}
 
-    # Use the standard BERT tokenizer.
+    # Use the standard BERT tokenizer. It will use the fast variant by default.
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
     assert model_cfg.vocab_size == tokenizer.vocab_size
@@ -107,9 +107,11 @@ def main(config_path: str):
             max_length=ptrain_cfg["max_seq_length"]
         )
 
+    # Tokenizes the full dataset.
     tokenized = dataset.map(
         tokenize_function,
         batched=True,
+        num_cpu=4, # Use more CPUs to speed it up.
         remove_columns=["text"] # Comment this
     )
 
