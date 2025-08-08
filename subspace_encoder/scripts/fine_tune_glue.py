@@ -162,9 +162,9 @@ def main():
 
         # These would be good to add, but weren't present in my
         # existing runs. I'll need to redo the fine-tuning experiments.
-        #warmup_ratio = 0.1, # Use the first 10% of the training steps for warmup.
-        #weight_decay = 0.01, # Regularization to avoid over-fitting.
-        
+        # So currently, warmup_ratio = 0 and weight_decay = 0.
+        warmup_ratio = sft_cfg["warmup_ratio"] # Preferably 0.1: Use the first 10% of the training steps for warmup.
+        weight_decay = sft_cfg["weight_decay"] # Preferably 0.01: Regularization to avoid over-fitting.
 
         # Evaluation and Logging
         eval_strategy="steps",
