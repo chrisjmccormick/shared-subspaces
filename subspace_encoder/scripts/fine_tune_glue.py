@@ -1,6 +1,7 @@
 import os
 
 # Disable tensorflow to avoid noisy warnings
+# (Though this doesn't seem to work)
 os.environ["TRANSFORMERS_NO_TF"] = "1"
 
 import argparse

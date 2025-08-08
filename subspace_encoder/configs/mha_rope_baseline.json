@@ -1,7 +1,7 @@
 {
-  "shorthand": "rd.16 - 6.mla.64.32 - mlp.1024 - model.256.lyr.6 - ah.8.32",
+  "shorthand": "rd.32 - 6.mha - mlp.1024 - model.256.lyr.6 - ah.8.32",
   
-  "notes": "Current top-performing MLA configuration",
+  "notes": "Baseline using standard MHA with RoPE",
   
   "model": {
   	
@@ -22,17 +22,17 @@
     "rope_scaling":         null,
 	"max_position_embeddings":  128,
 
-	"num_dense_layers":   0,	
-    "q_latent_dim":       64,	
-    "kv_latent_dim":      32,
+	"num_dense_layers":   6,	
+    "q_latent_dim":       null,	
+    "kv_latent_dim":      null,
 	
 	"num_attention_heads":  8,
 	"head_dim":             32,
-	"rope_dims":            16,
+	"rope_dims":            32,
 	"attention_bias":       false,	
 	
 	"output_subspace":    false,
-    "o_latent_dim":       64,
+    "o_latent_dim":       -1,
 	
     "attention_backend": "sdpa",
 
@@ -40,11 +40,11 @@
     "ffn_rank":          null,
 	
 	"vocab_subspace":   false,
-	"vocab_rank":        128
+	"vocab_rank":       null
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/mla_baseline",
+    "output_dir":        "checkpoints/mha_rope_baseline",
 	"seed":              42,
 	
     "train_batch_size":  256,
@@ -70,6 +70,8 @@
 	"lr":           2e-5,
 	"epochs":       3,
 	"seed":         42,
-	"max_length":   128
+	"max_length":   128,
+	"weight_decay": 0,
+	"warmup_ratio": 0
   }
 }

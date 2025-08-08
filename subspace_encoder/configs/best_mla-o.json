@@ -70,6 +70,8 @@
 	"lr":           2e-5,
 	"epochs":       3,
 	"seed":         42,
-	"max_length":   128
+    "max_length":   128,
+    "weight_decay": 0,
+	"warmup_ratio": 0
   }
 }
