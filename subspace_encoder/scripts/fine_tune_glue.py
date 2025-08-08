@@ -176,7 +176,7 @@ def main():
         
         # W&B Integration
         report_to="wandb",
-        disable_tqdm = True, # Let's try true
+        disable_tqdm = False,
 
         # Dataloader performance
         dataloader_num_workers=8,

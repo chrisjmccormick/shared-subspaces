@@ -1,11 +1,3 @@
-
-"""# ▂▂▂▂▂▂▂▂▂▂▂▂
-
-# train.py
-
-Source for DataCollator [here](https://github.com/huggingface/transformers/blob/6dfd561d9cd722dfc09f702355518c6d09b9b4e3/src/transformers/data/data_collator.py#L764)
-"""
-
 print("Importing Packages...\n")
 
 import argparse
@@ -26,11 +18,8 @@ from transformers import (
     set_seed,
 )
 
-
-
 # To disable a warning.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
 
 # Make sure we can import modules from the encoder-pretrain package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -55,7 +44,6 @@ def parse_args():
 
 def main(config_path: str):
     """Run pre-training using the provided configuration path."""
-    
     
     full_cfg, model_cfg = get_config(config_path)
 
@@ -111,7 +99,7 @@ def main(config_path: str):
     tokenized = dataset.map(
         tokenize_function,
         batched=True,
-        num_cpu=4, # Use more CPUs to speed it up.
+        num_proc=8, # Use more CPUs to speed it up--this helps a lot.
         remove_columns=["text"] # Comment this
     )
 
@@ -123,7 +111,6 @@ def main(config_path: str):
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm_probability=ptrain_cfg["mlm_probability"] # Default is 15%
-
     )
 
     # ========================
@@ -144,11 +131,6 @@ def main(config_path: str):
 
     print("\n======== Pre-Train ========")
     print(json.dumps(ptrain_cfg, indent=2))
-
-    # Print out final config for quick verification
-    #for k, v in ptrain_cfg.items():
-    #    print(f"{k:>25}: {v:>10}")
-
 
     print("=============================\n")
 
@@ -205,38 +187,43 @@ def main(config_path: str):
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
 
-        fp16=ptrain_cfg.get("fp16", False),
+        fp16=ptrain_cfg["fp16"],
 
         learning_rate=ptrain_cfg["learning_rate"],
-        #num_train_epochs=ptrain_cfg["num_train_epochs"],
-        max_steps=ptrain_cfg["num_train_steps"], # Changed from max_train_steps
+        max_steps=ptrain_cfg["num_train_steps"], 
 
+        # The dataloader is a bottleneck without these.
         dataloader_num_workers=ptrain_cfg.get("num_workers", 8),
         dataloader_pin_memory=ptrain_cfg.get("pin_memory", True),
+        # The prefetch factor didn't appear to help.
         #dataloader_prefetch_factor = ptrain_cfg.get("prefetch_factor", 2),
 
-        weight_decay=ptrain_cfg.get("weight_decay", 0.01),  # TODO - Add to configs
+        # TODO - Add this and warmup ratio to the config files.
+        weight_decay=ptrain_cfg.get("weight_decay", 0.01),  
 
         # Learning rate warmup (10% of total steps)
-        warmup_steps=int(0.1 * ptrain_cfg["num_train_steps"]),  # 5000 steps for your 50k setup
+        warmup_steps=int(0.1 * ptrain_cfg["num_train_steps"]),  
         lr_scheduler_type="linear",  # Linear warmup then decay
 
-        # Evaluate every xx steps
-        # Recent versions changed from 'evaluation_strategy'
+        # Evaluate every 2,000 steps
+        # Note: Recent versions of Trainer changed the name from 
+        # `evaluation_strategy` to `eval_strategy`.
         batch_eval_metrics = True, # To avoid OOM
         eval_strategy="steps",
         eval_steps=ptrain_cfg.get("eval_steps", 2000),
-        metric_for_best_model="eval_accuracy",
-
 
         logging_steps=50,
 
         # Checkpoint saving
+        metric_for_best_model="eval_accuracy",
         save_steps=2000,
         save_total_limit=2,           # Optional: keeps last 2 checkpoints
         save_strategy="steps",
+        
         report_to=["wandb"],
+        
         run_name=ptrain_cfg["run_name"],
+        
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
     )
 
@@ -354,13 +341,6 @@ def main(config_path: str):
         with open(ptrain_cfg["output_dir"] + "/full_config.json", "w") as f:
             json.dump(full_cfg, f, indent=2)
    
-        #!mkdir -p /content/checkpoints/bert_baseline_wikitext103
-        #!cp -r /content/checkpoints/* /content/drive/MyDrive/encoder-pretrain-wiki103/
-        shutil.copytree(
-            "/content/checkpoints", 
-            "/content/drive/MyDrive/encoder-pretrain-wiki103/checkpoints", 
-            dirs_exist_ok = True
-        )
 
     finally:
         # End the wandb run.
