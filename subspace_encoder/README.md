@@ -46,56 +46,56 @@ The model also includes additional optional shared-subspace-learning techniques 
 
 Numbers (1) and (2) aren't currently explored in the experimental results, but there are a few runs relating to (3).
 
-
-
-
 ## Status of Experiments
 
 The below should not be viewed as claims--there needs to be further validation of the code and results, and ablations need to be run.
-
 
 In all experiments, we're using a 6-layer encoder with an embedding length of 256. There are 8 attention heads, all of size 32.
 
 Below are the highest scoring configuriations of the three variants we're comparing.
 
+| # | Attention | Test Accuracy | Parameters | Query Latent | Key-Value Latent | Output Latent | Position Encoding | # of RoPE Dims |
+|:-:|:---------:|:-------------:|:----------:|:------------:|------------------|---------------|:-----------------:|:--------------:|
+| 1 | MHA       | 85.67         | 13.47M     | -          | -              | -           | RoPE              | 32             |
+| 2 | MLA       | 84.75         | 12.67M     | 64           | 32               | -           | RoPE              | 16             |
+| 3 | MLA-o     | 84.63         | 12.48M     | 64           | 32               | 64            | RoPE              | 32             |
 
-| Baseline Name | Test Accuracy | Parameters | Latent Spaces | Position Encoding | # of RoPE Dims |
-|---------------|---------------|------------|---------------------------------------------|-------------------|---------------------------|
-| MHA         | 85.32         | 13.50M     | n/a                                         | PEVs              | n/a                       |
-| MLA           | 84.75         | 12.67M     | 64 - 32                                     | RoPE              | 16                        |
-| MLA-o         | 84.63         | 12.48M     | 64 - 32 - 64                                | RoPE              | 32                        |
-
-
-
-"Latent Spaces" provides the size of the latent projections in the format
-
-`(Query) - (Key-Value) - (Output)`
-
-i.e., the current highest performing variant of MLA-o has:
+The 'latent' columns define the size of the respective latent spaces. i.e., the current highest performing variant of MLA-o (row 3) has:
 * A shared query latent projection: `256 → 64`
 * A shared key-value latent projection: `256 → 32`
 * A shared output projection: `64 → 256`
 
+Configuring the `SharedSpaceEncoder` to use standard multihead attention achieves the highest accuracy so far, this is row 1. 
+
+For the MLA variants, I chose the latent space sizes based on:
+
+* "What seemed to work well" for the Vision Transformer (where I was able to iterate faster)
+* The loose pattern from DeepSeek that:
+  * (1) The latents can be much smaller than the token vector, and 
+  * (2) That the query space should be larger than the key-value space.
+* The conjecture that the query and output spaces might need similar capacity.
+
+I haven't gotten to explore these choices much. These are just the best performing configurations of MLA and MLA-o that I have results for.
 
 Here is a summary of the current observations:
 
 **Impact of Output Latent**
 
-I only have two data points so far which directly compare MLA and MLAo under the same configurations. MLAo achieved higher SST-2 accuracy in one and MLA performed better in the other--see the section below on RoPE dimensions. 
+I only have two data points so far which directly compare MLA and MLAo under the same configurations. MLA-o achieved higher SST-2 accuracy in one and MLA performed better in the other--see the section below on RoPE dimensions. 
 
-In both, MLAo was slower (in terms of training samples per second), despite having fewer parameters. 
+In both, MLA-o was slower (in terms of training samples per second), despite having fewer parameters. 
 
 Before drawing any conclusions, I want to continue to explore:
 * Different model sizes, latent space dimensions, and sequence lengths.
 * The efficiency of the current code.
 
-**RoPE vs. PEVs**
+**Observations on Position Information**
 
-When using MLA, the scores on SST-2 increase significantly with the use of RoPE instead of learned position encoding vectors as in the original BERT. 
+_RoPE vs. PEVs_
 
-First, this needs to be compared to how much the baseline BERT benefits from RoPE. If the difference is significant, it implies that the PEVs do not work well with the added subspace projections. This would be a valuable insight to researchers exploring the use of attention latent spaces in encoders (such as the PoorViT paper).
+Early experiments were done using learned position encoding vectors as in the original BERT, but the inclusion of RoPE improved the scores on SST-2 substantially for all variants.
 
-**Number of RoPE Dimensions**
+_Number of RoPE Dimensions_
 
 The scores change significantly based on the number of head dimensions which receive RoPE information.
 
@@ -103,15 +103,20 @@ The scores change significantly based on the number of head dimensions which rec
 * Oddly, the current results are conflicting regarding MLA vs. MLAo:
     * MLA scores higher when only 16 of 32 dimensions receive RoPE.
     * MLAo performs better when it's applied to all 32.
-* This seems quite interesting if it isn't simply due to a bug or mistake, and if it holds up under multiple configurations.
 
+_MQA and RoPE key head subspace_
+
+One difference between the implementation of RoPE in `SharedSpaceEncoder` and standard MLA (in `DeepSeek3V3Attention`) is that:
+
+1. DS-V3 uses Multiquery Attention for the RoPE portions, with a single key head recieving RoPE but all query heads receiving it on their 64 RoPE dimensions.
+    * Here, we are applying RoPE to all key heads.
+2. The single RoPE key head does not draw from the shared subspace, but instead has direct access to the residual stream.
+    * Here, both the RoPE and NoPE dimensions of the head draw from the Key-Value subspace.
 
 
 ### Experiment Notebook
 
 Run results and discussion can be found in the `experiments.ipynb` notebook.
-
-
 
 ### Plans & Next Steps
 
@@ -120,6 +125,8 @@ Run results and discussion can be found in the `experiments.ipynb` notebook.
 Before attempting any sweeps over the latent space sizes, I'd like to sanity check this model's baseline implementation against the BERT implementation in HuggingFace Transformers.
 
 How do they compare in speed, and accuracy on SST-2? If there are substantial differences, those seem worth understanding before going further. 
+
+(TODO - I ran this experiment. HF `BERT` outperformed MLA but underperformed `SharedSpaceEncoder` with MHA)
 
 **Varying Latent Sizes**
 
@@ -176,7 +183,7 @@ subspace_encoder/
 ├── scripts/
 │   ├── fine_tune_glue.py      # Benchmark on GLUE -- currently just SST-2
 │   ├── train.py               # Pre-training
-│   └── run_experiment.ipynb   # Runs the training scripts within Colab
+│   └── run_experiments.ipynb   # Runs the training scripts within Colab
 ├── tests/
 │   ├── test_config.json
 │   └── test_shared_encoder.py    # Validates individual components
