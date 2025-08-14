@@ -109,4 +109,10 @@ No need to run it to completion (it takes 1.5 hours on an A100), but it will giv
 - Check out your run on wandb to watch the metrics in real time. 
 - Try modifying one or more of the hyperparameters by setting up a new config (see the tool at the end of the Notebook).
 
-If anything's confusing or you run into problems, head to this [issue](https://github.com/chrisjmccormick/shared-subspaces/issues/1) to discuss it, and we'll gradually get this thing going!
+If anything's confusing or you run into problems, head to this [issue](https://github.com/chrisjmccormick/shared-subspaces/issues/1) to discuss it, and we'll make sure this process gets smooth.
+
+Next, check out the Issues for ways to contribute. At this early stage, there's still a lot that can be done just by working with an AI to do it, so even if you're a beginner you may be able to lend a hand.
+
+We'll use Issues to discuss specific work, but if you're a member of the EleutherAI Discord server we have a 'community project' post [here](https://discordapp.com/channels/729741769192767510/1403903562706059334) for more general discussion.
+
+Thanks for your interest--looking forward to seeing where this goes!
