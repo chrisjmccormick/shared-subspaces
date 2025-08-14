@@ -98,3 +98,15 @@ If you are interested in these ideas, please feel free to open an issue or a pul
 ├── .gitignore
 └── README.md            # You are here!
 ```
+
+# Getting Started
+
+Welcome to the project!
+
+A great way to get started is to head to the subspace_encoder and try running the [run_experiments.ipynb](https://github.com/chrisjmccormick/shared-subspaces/blob/main/subspace_encoder/scripts/run_experiments.ipynb) Notebook. You can run it in Google Colab and it will clone this repository for you and kick off a pre-training run of the Encoder. 
+
+No need to run it to completion (it takes 1.5 hours on an A100), but it will give you a starting point for exploring. You can:
+- Check out your run on wandb to watch the metrics in real time. 
+- Try modifying one or more of the hyperparameters by setting up a new config (see the tool at the end of the Notebook).
+
+If anything's confusing or you run into problems, head to this [issue](https://github.com/chrisjmccormick/shared-subspaces/issues/1) to discuss it, and we'll gradually get this thing going!
