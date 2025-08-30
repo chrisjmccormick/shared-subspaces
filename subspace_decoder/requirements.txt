@@ -1,0 +1,14 @@
+# Minimal requirements for DeepSeek V3 MLA-o attention research prototype
+# Core dependencies only - removes flash attention and other heavy dependencies
+
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.20.0
+
+# Optional: For better performance (not required for research)
+# flash-attn>=2.0.0  # Uncomment if you want flash attention support
+
+# Optional: For training and evaluation
+# datasets>=2.10.0
+# evaluate>=0.4.0
+# wandb>=0.15.0  # For experiment tracking

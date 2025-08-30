@@ -210,3 +210,4 @@ encoder-pretrain/scripts/00_colab_command_line-prev.py
 encoder-pretrain/scripts/00_sanity_check-old.py
 encoder-pretrain/scripts/00_train_profiler.py
 encoder-pretrain/scripts/old-train_profiler.py
+subspace_encoder/scripts/fine_tune_glue2.py
