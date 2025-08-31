@@ -81,7 +81,12 @@
       "max_seq_length":    128,
       "eval_batch_size":   32,
       
-      "fp16":              true
+      "bf16":              true,
+      "fp16":              false,
+      
+      "torch_compile":         false,
+      "torch_compile_backend": "inductor",
+      "torch_compile_mode":    "default"
     }
 }
   

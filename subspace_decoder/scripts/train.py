@@ -39,6 +39,27 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch.nn as nn
 from transformers import DeepseekV3ForCausalLM
 
+def check_bf16_support():
+    """Check if BFloat16 is supported on the current hardware and PyTorch version."""
+    if not torch.cuda.is_available():
+        print("Warning: CUDA not available. BFloat16 training requires CUDA.")
+        return False
+    
+    # Check if the GPU supports BFloat16
+    if hasattr(torch.cuda, 'is_bf16_supported') and torch.cuda.is_bf16_supported():
+        print("✓ BFloat16 is supported on this hardware")
+        return True
+    
+    # Fallback check for older PyTorch versions
+    try:
+        # Try to create a small BFloat16 tensor on GPU
+        test_tensor = torch.tensor([1.0], dtype=torch.bfloat16, device='cuda')
+        print("✓ BFloat16 is supported on this hardware")
+        return True
+    except Exception as e:
+        print(f"Warning: BFloat16 not supported on this hardware: {e}")
+        return False
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to JSON config")
@@ -107,6 +128,26 @@ def main(config_path: str):
     # Initialize the optional stats dictionary so later assignments don't fail.
     if "stats" not in full_cfg:
         full_cfg["stats"] = {}
+    
+    # Validate mixed precision settings
+    if ptrain_cfg.get("bf16", False) and ptrain_cfg.get("fp16", False):
+        raise ValueError("Cannot enable both bf16 and fp16 simultaneously. Please choose one.")
+    
+    # Check BFloat16 compatibility if enabled
+    if ptrain_cfg.get("bf16", False):
+        if not check_bf16_support():
+            print("BFloat16 requested but not supported. Falling back to FP16.")
+            ptrain_cfg["bf16"] = False
+            ptrain_cfg["fp16"] = True
+    
+    # Display torch.compile status
+    if ptrain_cfg.get("torch_compile", False):
+        print(f"✓ torch.compile enabled:")
+        print(f"  Backend: {ptrain_cfg.get('torch_compile_backend', 'inductor')}")
+        print(f"  Mode: {ptrain_cfg.get('torch_compile_mode', 'default')}")
+        print("  Note: First training step will be slower due to compilation.")
+    else:
+        print("torch.compile disabled. Enable with 'torch_compile': true in config.")
 
     # Use the DeepSeek tokenizer
     tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-V3")
@@ -237,7 +278,13 @@ def main(config_path: str):
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
 
-        fp16=ptrain_cfg["fp16"],
+        bf16=ptrain_cfg.get("bf16", False),
+        fp16=ptrain_cfg.get("fp16", False),
+        
+        # torch.compile configuration for performance optimization
+        torch_compile=ptrain_cfg.get("torch_compile", False),
+        torch_compile_backend=ptrain_cfg.get("torch_compile_backend", "inductor"),
+        torch_compile_mode=ptrain_cfg.get("torch_compile_mode", "default"),
 
         learning_rate=ptrain_cfg["learning_rate"],
         max_steps=ptrain_cfg["num_train_steps"], 
