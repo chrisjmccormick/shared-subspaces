@@ -51,34 +51,59 @@ from models.shared_space_config import SharedSpaceDecoderConfig, get_config
 from layers.task_heads import SharedSpaceDecoderForCausalLM
 
 import torch.nn as nn
-
-
-def check_bf16_support():
-    """Check if BFloat16 is supported on the current hardware and PyTorch version."""
-    if not torch.cuda.is_available():
-        print("Warning: CUDA not available. BFloat16 training requires CUDA.")
-        return False
-    
-    # Check if the GPU supports BFloat16
-    if hasattr(torch.cuda, 'is_bf16_supported') and torch.cuda.is_bf16_supported():
-        print("✓ BFloat16 is supported on this hardware")
-        return True
-    
-    # Fallback check for older PyTorch versions
-    try:
-        # Try to create a small BFloat16 tensor on GPU
-        test_tensor = torch.tensor([1.0], dtype=torch.bfloat16, device='cuda')
-        print("✓ BFloat16 is supported on this hardware")
-        return True
-    except Exception as e:
-        print(f"Warning: BFloat16 not supported on this hardware: {e}")
-        return False
+from transformers import DeepseekV3ForCausalLM
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to JSON config")
     return parser.parse_args()
 
+def patch_attention_with_output_latent(model, o_latent_dim: int):
+    """
+    Replaces each attention layer's o_proj with a two-layer O-latent:
+      [H*v_head_dim] -> [o_latent_dim] -> [hidden_size]
+    
+    """
+    
+    # DeepSeek-V3 in HF is usually at model.model.layers[*].self_attn
+    for i, layer in enumerate(model.model.layers):
+        attn = layer.self_attn
+        in_features = attn.num_heads * attn.v_head_dim
+        out_features = attn.hidden_size
+        bias = getattr(attn.config, "attention_bias", False)
+
+        attn.o_proj = nn.Sequential(
+            nn.Linear(in_features, o_latent_dim, bias=False),   # O_a (no bias like your code)
+            nn.Linear(o_latent_dim, out_features, bias=bias),   # O_b (respect config.attention_bias)
+        )
+
+def create_model_with_mla_o(config_dict):
+    """
+    Create a DeepSeek V3 model with output subspace using the simple patching approach.
+    
+    Args:
+        config_dict: Dictionary with model configuration parameters
+    """
+    from transformers import DeepseekV3Config
+    
+    # Create a standard DeepSeek V3 config, excluding our custom parameters
+    standard_config_dict = {k: v for k, v in config_dict.items() 
+                           if k not in ['use_output_subspace', 'o_latent_dim']}
+    
+    # Create the config object
+    config = DeepseekV3Config(**standard_config_dict)
+    
+    # Create the model from scratch with our custom config
+    model = DeepseekV3ForCausalLM(config)
+    
+    # Apply output subspace patching if requested
+    if config_dict.get("use_output_subspace", False) and config_dict.get("o_latent_dim") is not None:
+        print(f"Patching attention layers with output latent dimension: {config_dict['o_latent_dim']}")
+        originals = patch_attention_with_output_latent(model, config_dict["o_latent_dim"])
+        # Store the originals in case we need to restore later
+        model._original_o_projs = originals
+    
+    return model
 
 def main(config_path: str):
     """Run pre-training using the provided configuration path."""
