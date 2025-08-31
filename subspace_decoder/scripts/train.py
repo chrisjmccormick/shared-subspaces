@@ -36,132 +36,58 @@ print("PROJECT_ROOT", PROJECT_ROOT)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from layers.deepseek_mla_o import DeepseekV3Attention
-from models.configuration_deepseek import DeepseekV3Config
+import torch.nn as nn
+from transformers import DeepseekV3ForCausalLM
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to JSON config")
     return parser.parse_args()
 
-def create_modified_config(base_config_dict):
+def patch_attention_with_output_latent(model, o_latent_dim: int):
     """
-    Create a config from the base config dictionary.
+    Replaces each attention layer's o_proj with a two-layer O-latent:
+      [H*v_head_dim] -> [o_latent_dim] -> [hidden_size]
     
-    Args:
-        base_config_dict: Dictionary with the DeepSeek V3 config parameters including output subspace parameters
     """
-    # Create a new config with all the original parameters plus the new ones
-    modified_config = DeepseekV3Config(
-        vocab_size=base_config_dict.get("vocab_size", 129280),
-        hidden_size=base_config_dict.get("hidden_size", 7168),
-        intermediate_size=base_config_dict.get("intermediate_size", 18432),
-        moe_intermediate_size=base_config_dict.get("moe_intermediate_size", 2048),
-        num_hidden_layers=base_config_dict.get("num_hidden_layers", 61),
-        num_nextn_predict_layers=base_config_dict.get("num_nextn_predict_layers", 1),
-        num_attention_heads=base_config_dict.get("num_attention_heads", 128),
-        num_key_value_heads=base_config_dict.get("num_key_value_heads", 128),
-        n_shared_experts=base_config_dict.get("n_shared_experts", 1),
-        n_routed_experts=base_config_dict.get("n_routed_experts", 256),
-        ep_size=base_config_dict.get("ep_size", 1),
-        routed_scaling_factor=base_config_dict.get("routed_scaling_factor", 2.5),
-        kv_lora_rank=base_config_dict.get("kv_lora_rank", 512),
-        q_lora_rank=base_config_dict.get("q_lora_rank", 1536),
-        qk_rope_head_dim=base_config_dict.get("qk_rope_head_dim", 64),
-        v_head_dim=base_config_dict.get("v_head_dim", 128),
-        qk_nope_head_dim=base_config_dict.get("qk_nope_head_dim", 128),
-        topk_method=base_config_dict.get("topk_method", "noaux_tc"),
-        n_group=base_config_dict.get("n_group", 8),
-        topk_group=base_config_dict.get("topk_group", 4),
-        num_experts_per_tok=base_config_dict.get("num_experts_per_tok", 8),
-        moe_layer_freq=base_config_dict.get("moe_layer_freq", 1),
-        first_k_dense_replace=base_config_dict.get("first_k_dense_replace", 3),
-        norm_topk_prob=base_config_dict.get("norm_topk_prob", True),
-        scoring_func=base_config_dict.get("scoring_func", "sigmoid"),
-        hidden_act=base_config_dict.get("hidden_act", "silu"),
-        max_position_embeddings=base_config_dict.get("max_position_embeddings", 4096),
-        initializer_range=base_config_dict.get("initializer_range", 0.02),
-        rms_norm_eps=base_config_dict.get("rms_norm_eps", 1e-6),
-        use_cache=base_config_dict.get("use_cache", True),
-        pad_token_id=base_config_dict.get("pad_token_id", None),
-        bos_token_id=base_config_dict.get("bos_token_id", 0),
-        eos_token_id=base_config_dict.get("eos_token_id", 1),
-        tie_word_embeddings=base_config_dict.get("tie_word_embeddings", False),
-        rope_theta=base_config_dict.get("rope_theta", 10000.0),
-        rope_scaling=base_config_dict.get("rope_scaling", None),
-        attention_bias=base_config_dict.get("attention_bias", False),
-        attention_dropout=base_config_dict.get("attention_dropout", 0.0),
-        # output projection parameters
-        use_output_subspace=base_config_dict.get("use_output_subspace", False),
-        o_latent_dim=base_config_dict.get("o_latent_dim", None),
-    )
     
-    return modified_config
+    # DeepSeek-V3 in HF is usually at model.model.layers[*].self_attn
+    for i, layer in enumerate(model.model.layers):
+        attn = layer.self_attn
+        in_features = attn.num_heads * attn.v_head_dim
+        out_features = attn.hidden_size
+        bias = getattr(attn.config, "attention_bias", False)
+
+        attn.o_proj = nn.Sequential(
+            nn.Linear(in_features, o_latent_dim, bias=False),   # O_a (no bias like your code)
+            nn.Linear(o_latent_dim, out_features, bias=bias),   # O_b (respect config.attention_bias)
+        )
 
 def create_model_with_mla_o(config_dict):
     """
-    Create a DeepSeek V3 model with output subspace from scratch.
+    Create a DeepSeek V3 model with output subspace using the simple patching approach.
     
     Args:
         config_dict: Dictionary with model configuration parameters
     """
-    # Create the config directly from the config_dict
-    # The output subspace parameters are already included in the config_dict
-    config = create_modified_config(config_dict)
+    from transformers import DeepseekV3Config
     
-    # Import the model class
-    from transformers import DeepseekV3ForCausalLM
+    # Create a standard DeepSeek V3 config, excluding our custom parameters
+    standard_config_dict = {k: v for k, v in config_dict.items() 
+                           if k not in ['use_output_subspace', 'o_latent_dim']}
     
-    # Create the model
+    # Create the config object
+    config = DeepseekV3Config(**standard_config_dict)
+    
+    # Create the model from scratch with our custom config
     model = DeepseekV3ForCausalLM(config)
     
-    # Apply our custom class to all layers
-    for i, layer in enumerate(model.model.layers):
-        # Create new attention layer with modified config
-        new_attention = DeepseekV3Attention(
-            config=config,
-            layer_idx=i
-        )
-        
-        # Copy weights from the original attention layer
-        original_attention = layer.self_attn
-        
-        # Copy input projection weights
-        if hasattr(original_attention, 'q_proj'):
-            new_attention.q_proj.weight.data = original_attention.q_proj.weight.data.clone()
-        else:
-            # Handle LoRA case
-            new_attention.q_a_proj.weight.data = original_attention.q_a_proj.weight.data.clone()
-            if hasattr(original_attention.q_a_proj, 'bias') and original_attention.q_a_proj.bias is not None:
-                new_attention.q_a_proj.bias.data = original_attention.q_a_proj.bias.data.clone()
-            new_attention.q_a_layernorm.weight.data = original_attention.q_a_layernorm.weight.data.clone()
-            new_attention.q_b_proj.weight.data = original_attention.q_b_proj.weight.data.clone()
-        
-        # Copy KV projection weights
-        new_attention.kv_a_proj_with_mqa.weight.data = original_attention.kv_a_proj_with_mqa.weight.data.clone()
-        if hasattr(original_attention.kv_a_proj_with_mqa, 'bias') and original_attention.kv_a_proj_with_mqa.bias is not None:
-            new_attention.kv_a_proj_with_mqa.bias.data = original_attention.kv_a_proj_with_mqa.bias.data.clone()
-        new_attention.kv_a_layernorm.weight.data = original_attention.kv_a_layernorm.weight.data.clone()
-        new_attention.kv_b_proj.weight.data = original_attention.kv_b_proj.weight.data.clone()
-        
-        # Handle output projection weights
-        if config.use_output_subspace and config.o_latent_dim is not None:
-            # Initialize the new output projections
-            torch.nn.init.xavier_uniform_(new_attention.o_a_proj.weight)
-            torch.nn.init.xavier_uniform_(new_attention.o_b_proj.weight)
-            if new_attention.o_b_proj.bias is not None:
-                torch.nn.init.zeros_(new_attention.o_b_proj.bias)
-        else:
-            # Copy the original output projection
-            new_attention.o_proj.weight.data = original_attention.o_proj.weight.data.clone()
-            if original_attention.o_proj.bias is not None:
-                new_attention.o_proj.bias.data = original_attention.o_proj.bias.data.clone()
-        
-        # Copy rotary embedding
-        new_attention.rotary_emb = original_attention.rotary_emb
-        
-        # Replace the attention layer
-        layer.self_attn = new_attention
+    # Apply output subspace patching if requested
+    if config_dict.get("use_output_subspace", False) and config_dict.get("o_latent_dim") is not None:
+        print(f"Patching attention layers with output latent dimension: {config_dict['o_latent_dim']}")
+        originals = patch_attention_with_output_latent(model, config_dict["o_latent_dim"])
+        # Store the originals in case we need to restore later
+        model._original_o_projs = originals
     
     return model
 
