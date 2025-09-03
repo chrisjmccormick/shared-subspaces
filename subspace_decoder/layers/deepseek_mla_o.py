@@ -8,8 +8,6 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 
 from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask_for_sdpa
-from transformers.modeling_output import CachedDecoderOutputs
-from transformers.modeling_utils import Logger
 
 from transformers import (
     DeepseekV3Config, 
@@ -19,6 +17,22 @@ from transformers import (
     DeepseekV3DynamicNTKScalingRotaryEmbedding, 
     DeepseekV3YarnRotaryEmbedding
 )
+
+class DeepseekV3RMSNorm(nn.Module):
+    def __init__(self, hidden_size, eps=1e-6):
+        """
+        DeepseekV3RMSNorm is equivalent to T5LayerNorm
+        """
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.variance_epsilon = eps
+
+    def forward(self, hidden_states):
+        input_dtype = hidden_states.dtype
+        hidden_states = hidden_states.to(torch.float32)
+        variance = hidden_states.pow(2).mean(-1, keepdim=True)
+        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+        return self.weight * hidden_states.to(input_dtype)
 
 # Copied from transformers.models.llama.modeling_llama.repeat_kv
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:

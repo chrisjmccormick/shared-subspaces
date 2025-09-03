@@ -36,134 +36,39 @@ print("PROJECT_ROOT", PROJECT_ROOT)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from layers.deepseek_mla_o import DeepseekV3Attention
-from models.configuration_deepseek import DeepseekV3Config
+from layers.patch_o_proj import patch_o_proj_implementation
+
+from transformers import DeepseekV3Config, DeepseekV3ForCausalLM
+
+import torch.nn as nn
+
+
+def check_bf16_support():
+    """Check if BFloat16 is supported on the current hardware and PyTorch version."""
+    if not torch.cuda.is_available():
+        print("Warning: CUDA not available. BFloat16 training requires CUDA.")
+        return False
+    
+    # Check if the GPU supports BFloat16
+    if hasattr(torch.cuda, 'is_bf16_supported') and torch.cuda.is_bf16_supported():
+        print("✓ BFloat16 is supported on this hardware")
+        return True
+    
+    # Fallback check for older PyTorch versions
+    try:
+        # Try to create a small BFloat16 tensor on GPU
+        test_tensor = torch.tensor([1.0], dtype=torch.bfloat16, device='cuda')
+        print("✓ BFloat16 is supported on this hardware")
+        return True
+    except Exception as e:
+        print(f"Warning: BFloat16 not supported on this hardware: {e}")
+        return False
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to JSON config")
     return parser.parse_args()
 
-def create_modified_config(base_config_dict):
-    """
-    Create a config from the base config dictionary.
-    
-    Args:
-        base_config_dict: Dictionary with the DeepSeek V3 config parameters including output subspace parameters
-    """
-    # Create a new config with all the original parameters plus the new ones
-    modified_config = DeepseekV3Config(
-        vocab_size=base_config_dict.get("vocab_size", 129280),
-        hidden_size=base_config_dict.get("hidden_size", 7168),
-        intermediate_size=base_config_dict.get("intermediate_size", 18432),
-        moe_intermediate_size=base_config_dict.get("moe_intermediate_size", 2048),
-        num_hidden_layers=base_config_dict.get("num_hidden_layers", 61),
-        num_nextn_predict_layers=base_config_dict.get("num_nextn_predict_layers", 1),
-        num_attention_heads=base_config_dict.get("num_attention_heads", 128),
-        num_key_value_heads=base_config_dict.get("num_key_value_heads", 128),
-        n_shared_experts=base_config_dict.get("n_shared_experts", 1),
-        n_routed_experts=base_config_dict.get("n_routed_experts", 256),
-        ep_size=base_config_dict.get("ep_size", 1),
-        routed_scaling_factor=base_config_dict.get("routed_scaling_factor", 2.5),
-        kv_lora_rank=base_config_dict.get("kv_lora_rank", 512),
-        q_lora_rank=base_config_dict.get("q_lora_rank", 1536),
-        qk_rope_head_dim=base_config_dict.get("qk_rope_head_dim", 64),
-        v_head_dim=base_config_dict.get("v_head_dim", 128),
-        qk_nope_head_dim=base_config_dict.get("qk_nope_head_dim", 128),
-        topk_method=base_config_dict.get("topk_method", "noaux_tc"),
-        n_group=base_config_dict.get("n_group", 8),
-        topk_group=base_config_dict.get("topk_group", 4),
-        num_experts_per_tok=base_config_dict.get("num_experts_per_tok", 8),
-        moe_layer_freq=base_config_dict.get("moe_layer_freq", 1),
-        first_k_dense_replace=base_config_dict.get("first_k_dense_replace", 3),
-        norm_topk_prob=base_config_dict.get("norm_topk_prob", True),
-        scoring_func=base_config_dict.get("scoring_func", "sigmoid"),
-        hidden_act=base_config_dict.get("hidden_act", "silu"),
-        max_position_embeddings=base_config_dict.get("max_position_embeddings", 4096),
-        initializer_range=base_config_dict.get("initializer_range", 0.02),
-        rms_norm_eps=base_config_dict.get("rms_norm_eps", 1e-6),
-        use_cache=base_config_dict.get("use_cache", True),
-        pad_token_id=base_config_dict.get("pad_token_id", None),
-        bos_token_id=base_config_dict.get("bos_token_id", 0),
-        eos_token_id=base_config_dict.get("eos_token_id", 1),
-        tie_word_embeddings=base_config_dict.get("tie_word_embeddings", False),
-        rope_theta=base_config_dict.get("rope_theta", 10000.0),
-        rope_scaling=base_config_dict.get("rope_scaling", None),
-        attention_bias=base_config_dict.get("attention_bias", False),
-        attention_dropout=base_config_dict.get("attention_dropout", 0.0),
-        # output projection parameters
-        use_output_subspace=base_config_dict.get("use_output_subspace", False),
-        o_latent_dim=base_config_dict.get("o_latent_dim", None),
-    )
-    
-    return modified_config
-
-def create_model_with_mla_o(config_dict):
-    """
-    Create a DeepSeek V3 model with output subspace from scratch.
-    
-    Args:
-        config_dict: Dictionary with model configuration parameters
-    """
-    # Create the config directly from the config_dict
-    # The output subspace parameters are already included in the config_dict
-    config = create_modified_config(config_dict)
-    
-    # Import the model class
-    from transformers import DeepseekV3ForCausalLM
-    
-    # Create the model
-    model = DeepseekV3ForCausalLM(config)
-    
-    # Apply our custom class to all layers
-    for i, layer in enumerate(model.model.layers):
-        # Create new attention layer with modified config
-        new_attention = DeepseekV3Attention(
-            config=config,
-            layer_idx=i
-        )
-        
-        # Copy weights from the original attention layer
-        original_attention = layer.self_attn
-        
-        # Copy input projection weights
-        if hasattr(original_attention, 'q_proj'):
-            new_attention.q_proj.weight.data = original_attention.q_proj.weight.data.clone()
-        else:
-            # Handle LoRA case
-            new_attention.q_a_proj.weight.data = original_attention.q_a_proj.weight.data.clone()
-            if hasattr(original_attention.q_a_proj, 'bias') and original_attention.q_a_proj.bias is not None:
-                new_attention.q_a_proj.bias.data = original_attention.q_a_proj.bias.data.clone()
-            new_attention.q_a_layernorm.weight.data = original_attention.q_a_layernorm.weight.data.clone()
-            new_attention.q_b_proj.weight.data = original_attention.q_b_proj.weight.data.clone()
-        
-        # Copy KV projection weights
-        new_attention.kv_a_proj_with_mqa.weight.data = original_attention.kv_a_proj_with_mqa.weight.data.clone()
-        if hasattr(original_attention.kv_a_proj_with_mqa, 'bias') and original_attention.kv_a_proj_with_mqa.bias is not None:
-            new_attention.kv_a_proj_with_mqa.bias.data = original_attention.kv_a_proj_with_mqa.bias.data.clone()
-        new_attention.kv_a_layernorm.weight.data = original_attention.kv_a_layernorm.weight.data.clone()
-        new_attention.kv_b_proj.weight.data = original_attention.kv_b_proj.weight.data.clone()
-        
-        # Handle output projection weights
-        if config.use_output_subspace and config.o_latent_dim is not None:
-            # Initialize the new output projections
-            torch.nn.init.xavier_uniform_(new_attention.o_a_proj.weight)
-            torch.nn.init.xavier_uniform_(new_attention.o_b_proj.weight)
-            if new_attention.o_b_proj.bias is not None:
-                torch.nn.init.zeros_(new_attention.o_b_proj.bias)
-        else:
-            # Copy the original output projection
-            new_attention.o_proj.weight.data = original_attention.o_proj.weight.data.clone()
-            if original_attention.o_proj.bias is not None:
-                new_attention.o_proj.bias.data = original_attention.o_proj.bias.data.clone()
-        
-        # Copy rotary embedding
-        new_attention.rotary_emb = original_attention.rotary_emb
-        
-        # Replace the attention layer
-        layer.self_attn = new_attention
-    
-    return model
 
 def main(config_path: str):
     """Run pre-training using the provided configuration path."""
@@ -181,14 +86,40 @@ def main(config_path: str):
     # Initialize the optional stats dictionary so later assignments don't fail.
     if "stats" not in full_cfg:
         full_cfg["stats"] = {}
+    
+    # Validate mixed precision settings
+    if ptrain_cfg.get("bf16", False) and ptrain_cfg.get("fp16", False):
+        raise ValueError("Cannot enable both bf16 and fp16 simultaneously. Please choose one.")
+    
+    # Check BFloat16 compatibility if enabled
+    if ptrain_cfg.get("bf16", False):
+        if not check_bf16_support():
+            print("BFloat16 requested but not supported. Falling back to FP16.")
+            ptrain_cfg["bf16"] = False
+            ptrain_cfg["fp16"] = True
+    
+    # Display torch.compile status
+    if ptrain_cfg.get("torch_compile", False):
+        print(f"✓ torch.compile enabled:")
+        print(f"  Backend: {ptrain_cfg.get('torch_compile_backend', 'inductor')}")
+        print(f"  Mode: {ptrain_cfg.get('torch_compile_mode', 'default')}")
+        print("  Note: First training step will be slower due to compilation.")
+    else:
+        print("torch.compile disabled. Enable with 'torch_compile': true in config.")
 
     # Use the DeepSeek tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-V3")
+    #tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-V3")
     
     # Set pad token if not already set
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    #if tokenizer.pad_token is None:
+    #    tokenizer.pad_token = tokenizer.eos_token
 
+    
+    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    # gpt2 has no pad by default; use EOS for padding in causal LM
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+        
     # Verify vocab size matches
     assert model_cfg["vocab_size"] == tokenizer.vocab_size
 
@@ -207,7 +138,77 @@ def main(config_path: str):
     # ======================
     #    Prepare Dataset
     # ======================
+    
+    dataset = load_dataset(
+        ptrain_cfg["dataset_name"],
+        ptrain_cfg["dataset_config"]
+    )
+    print(dataset)
+    
+    block_size = ptrain_cfg["max_seq_length"]
+    eos_id = tokenizer.eos_token_id
+    
+    # 1) Tokenize without truncation/padding
+    def tokenize_function(examples):
+        # add_special_tokens=False keeps things raw; we’ll insert EOS between docs
+        return tokenizer(
+            examples["text"],
+            add_special_tokens=False,
+        )
+    
+    # 2) Group into contiguous 1024-token blocks (concat + chunk)
+    def group_texts(examples):
+        # Flatten and insert EOS between documents to avoid cross-article bleed
+        input_ids = []
+        for ids in examples["input_ids"]:
+            if len(ids) > 0:
+                input_ids.extend(ids)
+            # add an EOS fencepost between docs
+            input_ids.append(eos_id)
+    
+        # Drop the trailing partial block so every example is full length
+        total_length = (len(input_ids) // block_size) * block_size
+        input_ids = input_ids[:total_length]
+    
+        # Split into equal blocks
+        result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
+        # Labels are next-token targets; Trainer/model will do the shift
+        return {
+            "input_ids": result_input_ids,
+            "labels": [ids.copy() for ids in result_input_ids],
+            # Optional attention masks (all ones because no padding)
+            "attention_mask": [[1] * block_size for _ in result_input_ids],
+        }
+    
+    # Tokenize
+    tokenized = dataset.map(
+        tokenize_function,
+        batched=True,
+        num_proc=8,
+        remove_columns=dataset["train"].column_names,  # drop raw "text"
+    )
+    
+    # Concatenate + chunk
+    tokenized = tokenized.map(
+        group_texts,
+        batched=True,
+        num_proc=8,
+    )
+    
+    # Use a simple collator; we already created labels and have no pads
+    from transformers import default_data_collator
+    data_collator = default_data_collator
 
+
+    """
+
+    Below is the standard approach, no concatenation.
+    
+    # ======================
+    #    Prepare Dataset
+    # ======================
+
+    
     dataset = load_dataset(
         ptrain_cfg["dataset_name"],
         ptrain_cfg["dataset_config"]
@@ -232,17 +233,37 @@ def main(config_path: str):
         remove_columns=["text"] # Comment this
     )
 
-    # Use DataCollatorForLanguageModeling for causal LM
+    # Use DataCollatorForLanguageModeling with mlm=False for causal LM
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
+        mlm=False,  # Disable masking for causal LM
     )
+    """
 
     # ========================
     #    Initialize Model
     # ========================
 
-    print("Creating MLA-o model...")
-    model = create_model_with_mla_o(model_cfg)
+    print("Initializing model...")
+
+    # Strip patch-only keys from HF config
+    lib_cfg_dict = {
+        k: v for k, v in model_cfg.items()
+        if k not in ["use_output_subspace", "o_latent_dim", "o_proj_variant"]
+    }
+
+    # Define the library config and model.
+    lib_cfg = DeepseekV3Config(**lib_cfg_dict)
+    model = DeepseekV3ForCausalLM(lib_cfg)
+
+    if model_cfg['o_proj_variant'] != "vanilla":
+        # Apply the changes based on the variant
+        patch_o_proj_implementation(
+            model, 
+            model_cfg["o_proj_variant"],
+            model_cfg["o_latent_dim"],
+            model_cfg["rms_norm_eps"]
+        )
 
     # ================================
     #       Review Configuration
@@ -256,6 +277,16 @@ def main(config_path: str):
 
     print("\n======== Pre-Train ========")
     print(json.dumps(ptrain_cfg, indent=2))
+
+    # Calculate and display effective batch size
+    device_batch_size = ptrain_cfg["train_batch_size"]
+    gradient_accumulation_steps = ptrain_cfg.get("gradient_accumulation_steps", 1)
+    effective_batch_size = device_batch_size * gradient_accumulation_steps
+    
+    print(f"\n======== Batch Size Configuration ========")
+    print(f"Device batch size: {device_batch_size}")
+    print(f"Gradient accumulation steps: {gradient_accumulation_steps}")
+    print(f"Effective batch size: {effective_batch_size}")
 
     print("=============================\n")
 
@@ -309,8 +340,15 @@ def main(config_path: str):
 
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
+        gradient_accumulation_steps=ptrain_cfg.get("gradient_accumulation_steps", 1),
 
-        fp16=ptrain_cfg["fp16"],
+        bf16=ptrain_cfg.get("bf16", False),
+        fp16=ptrain_cfg.get("fp16", False),
+        
+        # torch.compile configuration for performance optimization
+        torch_compile=ptrain_cfg.get("torch_compile", False),
+        torch_compile_backend=ptrain_cfg.get("torch_compile_backend", "inductor"),
+        torch_compile_mode=ptrain_cfg.get("torch_compile_mode", "default"),
 
         learning_rate=ptrain_cfg["learning_rate"],
         max_steps=ptrain_cfg["num_train_steps"], 
@@ -333,6 +371,7 @@ def main(config_path: str):
         batch_eval_metrics = True, # To avoid OOM
         eval_strategy="steps",
         eval_steps=ptrain_cfg.get("eval_steps", 2000),
+        eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
 
         logging_steps=50,
         metric_for_best_model="eval_loss",
@@ -348,29 +387,72 @@ def main(config_path: str):
 
     print(training_args)
 
-    def compute_metrics(eval_pred):
-        predictions, labels = eval_pred
-        
-        # For causal LM, we compute perplexity
-        # Shift predictions and labels for next token prediction
-        shift_logits = predictions[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous()
-        
-        # Flatten the tokens
-        shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-        shift_labels = shift_labels.view(-1)
-        
-        # Compute loss
-        loss_fct = torch.nn.CrossEntropyLoss()
-        loss = loss_fct(shift_logits, shift_labels)
-        
-        # Compute perplexity
-        perplexity = torch.exp(loss)
-        
-        return {
-            "perplexity": perplexity.item(),
-            "loss": loss.item(),
-        }
+    import numpy as np
+
+    class PerplexityMetric:
+        """
+        A stateful class to compute perplexity in a batch-wise manner to avoid OOM.
+        Similar to the MLMAccuracyMetric from the encoder training.
+        """
+        def __init__(self):
+            # Initialize state variables to store running totals
+            self.total_loss = 0.0
+            self.total_tokens = 0
+
+        def __call__(self, eval_pred, compute_result=False):
+            """
+            This method will be called by the Trainer.
+            """
+            predictions, labels = eval_pred
+
+            # For causal LM, we compute perplexity
+            # Shift predictions and labels for next token prediction
+            shift_logits = predictions[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            
+            # Flatten the tokens
+            shift_logits = shift_logits.view(-1, shift_logits.size(-1))
+            shift_labels = shift_labels.view(-1)
+            
+            # Create a mask for valid tokens (not padding, typically -100)
+            mask = shift_labels != -100
+            
+            if mask.sum() > 0:  # Only compute if there are valid tokens
+                # Compute loss only on valid tokens
+                loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
+                batch_loss = loss_fct(shift_logits[mask], shift_labels[mask])
+                
+                # Add to running totals
+                self.total_loss += batch_loss.item()
+                self.total_tokens += mask.sum().item()
+
+            # If this is the final call after all batches are processed
+            if compute_result:
+                # Avoid division by zero
+                if self.total_tokens == 0:
+                    avg_loss = 0.0
+                    perplexity = float('inf')
+                else:
+                    avg_loss = self.total_loss / self.total_tokens
+                    perplexity = np.exp(avg_loss)
+
+                # Prepare the final metrics dictionary
+                metrics = {
+                    "perplexity": perplexity,
+                    "loss": avg_loss,
+                }
+
+                # Reset state for the next evaluation run
+                self.total_loss = 0.0
+                self.total_tokens = 0
+
+                return metrics
+
+            # For intermediate calls, return an empty dict
+            return {}
+
+    # Instantiate your stateful metric computer
+    perplexity_metric = PerplexityMetric()
 
     # ===============================
     #           Trainer
@@ -380,7 +462,7 @@ def main(config_path: str):
         args=training_args,
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["validation"],
-        compute_metrics=compute_metrics,
+        compute_metrics=perplexity_metric,
 
         # New argument, allows for other modalities.
         processing_class=tokenizer,

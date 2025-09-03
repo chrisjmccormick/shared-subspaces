@@ -50,9 +50,27 @@ The core experiments compare three architectures:
 
 Find the implementation, usage, and full experimental details in the `subspace_encoder/README.md`.
 
+### 3. `subspace_decoder/`
+
+Building on the encoder experiments, this project implements and evaluates the shared output latent space using a decoder architecture based on HuggingFace's DeepSeek-V3 implementation. Rather than building a custom model from scratch, this approach patches the existing `DeepseekV3ForCausalLM` to add the output subspace decomposition.
+
+The core experiments compare the same three architectures as the encoder project:
+
+1. **MHA**: Standard Multihead Attention baseline.
+2. **MLA**: Multihead Latent Attention (DeepSeek-V3's approach).
+3. **MLA-o**: MLA with shared output latent space.
+
+Models are pre-trained on WikiText-103 and fine-tuned on SST-2, with experiments conducted at both short (128 tokens) and longer (1,024 tokens) sequence lengths to evaluate the impact of context length on the shared output space.
+
+Find the implementation details, experimental results, and usage instructions in the `subspace_decoder/README.md`.
+
 ## Current Status & Preliminary Results
 
-Experiments were run using 6-layer encoders with a hidden dimension of 256 and 8 attention heads. The table below shows the best-performing configurations for each variant found so far, evaluated on SST-2 test accuracy.
+We have conducted experiments with both encoder and decoder architectures using 6-layer models with a hidden dimension of 256 and 8 attention heads.
+
+### Encoder Results (SubspaceEncoder)
+
+The table below shows the best-performing encoder configurations evaluated on SST-2 test accuracy:
 
 
 | # | Attention | Test Accuracy | Parameters | Query Latent | Key-Value Latent | Output Latent | Position Encoding | # of RoPE Dims |
@@ -62,19 +80,31 @@ Experiments were run using 6-layer encoders with a hidden dimension of 256 and 8
 | 3 | MLA-o     | 84.63         | 12.48M     | 64           | 32               | 64            | RoPE              | 32             |
 
 
+### Decoder Results (DeepSeek-V3 based)
+
+The decoder experiments, using patched DeepSeek-V3 models, show performance at different sequence lengths:
+
+**SST-2 Accuracy (Sequence Length 1,024)**
+
+|| Attention | Test Accuracy | Parameters | Query Latent | Key-Value Latent | Output Latent | Perplexity (WikiText-103) |
+|:---------:|:-------------:|:----------:|:------------:|------------------|---------------|:-------------------------:|
+|| MLA       | 87.96         | 16.26M     | 96           | 64               | n/a           | 28.89                     |
+|| MLA-o     | 86.24         | 16.17M     | 96           | 64               | 96            | 29.33                     |
+
 **Key Observations:**
 
-  * The standard MHA baseline currently achieves the highest accuracy.
-  * Adding the shared output space (MLA-o) results in a slight drop in accuracy compared to standard MLA, while reducing parameter count by ~1.5%.
-  * At this small scale, MLA-o is slower in training throughput, likely due to the overhead of an additional matrix multiplication.
+  * **Encoder vs. Decoder**: The decoder models achieve higher SST-2 accuracy (~87-88%) compared to encoders (~84-86%), likely due to the Mixture of Experts architecture.
+  * **Consistency Across Architectures**: Both encoder and decoder experiments show that MLA-o underperforms standard MLA by 1-2 percentage points while reducing parameter count.
+  * **Scale Effects**: At sequence length 1,024, the performance gap between MLA and MLA-o remains consistent with shorter sequences.
+  * **Throughput**: At current model scales, MLA-o does not yet show the expected throughput improvements, likely requiring larger models or more attention heads to become beneficial.
 
-These results are preliminary. Further exploration is needed to understand the trade-offs and identify scenarios where an output latent space could be advantageous.
+These results are preliminary. Further exploration is needed to understand the trade-offs and identify scenarios where an output latent space could be advantageous, particularly at larger scales where the computational benefits may become more apparent.
 
 ## Future Directions & Collaboration
 
 This is an active research project, and I welcome feedback, discussion, and collaboration! Some potential next steps include:
 
-  * **Decoder Experiments:** The most direct test would be to add the output subspace to a well-known implementation like HuggingFace's `DeepSeekV3Attention` and run pre-training experiments.
+  * **Scaling Experiments:** Test the output subspace at larger model scales with more attention heads and larger hidden dimensions to identify the point where computational benefits become apparent.
   * **Throughput Analysis:** Systematically benchmark the performance (samples/sec) of an isolated attention layer to find the model/latent sizes where MLA-o becomes more computationally efficient.
   * **Hyperparameter Sweeps:** Thoroughly explore the impact of different latent space sizes for the query, key-value, and output projections.
   * **Subspace Alignment:** An interpretability tangent to investigate if the output heads align with other subspaces in the model.
@@ -94,6 +124,15 @@ If you are interested in these ideas, please feel free to open an issue or a pul
 │   ├── scripts/         # Scripts for pre-training and fine-tuning.
 │   ├── models/          # The SharedSubspaceEncoder model definition.
 │   └── run_experiments.ipynb  # Notebook for running experiments and analyzing results.
+│
+├── subspace_decoder/    # Decoder experiments using patched DeepSeek-V3.
+│   ├── configs/         # Model and training configurations.
+│   ├── layers/          # Output subspace patching and implementations.
+│   ├── scripts/         # Training and fine-tuning scripts.
+│   └── run_experiments.ipynb  # Notebook for decoder experiments.
+│
+├── journals/            # Research notes and experiment documentation.
+│   └── 2025-09-02 - Initial Decoder Experiments.ipynb
 │
 ├── .gitignore
 └── README.md            # You are here!
