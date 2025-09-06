@@ -214,3 +214,7 @@ subspace_encoder/scripts/fine_tune_glue2.py
 subspace_encoder/checkpoints/
 subspace_encoder/wandb/
 subspace_encoder/trainer_output/
+
+# macOS metadata
+.DS_Store
+*/.DS_Store
