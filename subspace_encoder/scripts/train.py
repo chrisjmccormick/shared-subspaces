@@ -187,6 +187,8 @@ def main(config_path: str):
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
 
+        # Either fp16 or bf16 can be enabled, not both.
+        bf16=ptrain_cfg["bf16"],
         fp16=ptrain_cfg["fp16"],
 
         learning_rate=ptrain_cfg["learning_rate"],
@@ -219,12 +221,30 @@ def main(config_path: str):
         save_steps=2000,
         save_total_limit=2,           # Optional: keeps last 2 checkpoints
         save_strategy="steps",
+        load_best_model_at_end=True,
+        greater_is_better=True,
+
         
         report_to=["wandb"],
         
         run_name=ptrain_cfg["run_name"],
         
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
+
+        # Enable torch compile if specified
+        torch_compile=ptrain_cfg.get("torch_compile", False),
+        torch_compile_backend=ptrain_cfg.get("torch_compile_backend", "inductor"),
+        torch_compile_mode=ptrain_cfg.get("torch_compile_mode", "default"),
+
+        # Set seed before dataloaders are initialized.
+        seed=ptrain_cfg["seed"],
+
+        # Push to hub configuration (disabled by default)
+        # Set them in the config file to push trained models to the HuggingFace hub.
+        push_to_hub=ptrain_cfg.get("push_to_hub", False),
+        hub_model_id=ptrain_cfg.get("hub_model_id", None),
+        hub_strategy=ptrain_cfg.get("hub_strategy", "every_save")
+
     )
 
     print(training_args)
@@ -310,7 +330,7 @@ def main(config_path: str):
         #compute_metrics=compute_metrics,
         compute_metrics=mlm_accuracy_metric,
         # New argument, allows for other modalities.
-        processing_class=tokenizer,
+        tokenizer=tokenizer,
 
         data_collator=data_collator,
     )

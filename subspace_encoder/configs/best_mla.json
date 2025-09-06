@@ -44,28 +44,36 @@
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/mla_baseline",
-	"seed":              42,
+    "output_dir":           "checkpoints/mla_baseline",
+	"seed":                 42,
 	
-    "train_batch_size":  256,
-    "learning_rate":     5e-4,
-    "num_train_steps":   50000,
-	"eval_steps":        2000,
-	"weight_decay":      0.01,
+    "train_batch_size":     256,
+    "learning_rate":        5e-4,
+    "num_train_steps":      50000,
+	"eval_steps":           2000,
+	"weight_decay":         0.01,
 	
 	
-    "mlm_probability":   0.15,
-    "dataset_name":      "wikitext",
-    "dataset_config":    "wikitext-103-raw-v1",
+    "mlm_probability":      0.15,
+    "dataset_name":         "wikitext",
+    "dataset_config":       "wikitext-103-raw-v1",
     
-	"max_seq_length":    128,
-	"eval_batch_size":   64,
+	"max_seq_length":       128,
+	"eval_batch_size":      64,
 	
-    "fp16":              true,
+    "fp16":                 false,
+    "bf16":                 true,
+    "torch_compile":        true,
+    "torch_compile_backend": "inductor",
+    "torch_compile_mode":   "default",
 
-    "best_checkpoint": "checkpoints/mla_baseline/checkpoint-50000",
-    "run_name": "mla-o_baseline",
-    "run_id": "koko"
+    "best_checkpoint":      "checkpoints/mla_baseline/checkpoint-50000",
+    "run_name":             "mla_baseline",
+    "run_id":               "koko",
+
+    "push_to_hub":          true,
+    "hub_model_id":         "kokolamba/encoder-mla-baseline-perf",
+    "hub_strategy":         "end"
   },
   
   "fine_tune": {
