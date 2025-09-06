@@ -211,3 +211,6 @@ encoder-pretrain/scripts/00_sanity_check-old.py
 encoder-pretrain/scripts/00_train_profiler.py
 encoder-pretrain/scripts/old-train_profiler.py
 subspace_encoder/scripts/fine_tune_glue2.py
+subspace_encoder/checkpoints/
+subspace_encoder/wandb/
+subspace_encoder/trainer_output/

@@ -44,3 +44,11 @@ wandb login
 ```
 export WANDB_MODE=online
 ```
+
+5. ADD the following to the pretrain config in `best_mla.json` and `best_mla-o.json`
+>NOTE: Ensure to remove them when done training from the config files.
+```
+"best_checkpoint": "checkpoints/mla_baseline/checkpoint-50000",
+"run_name": "mla-o_baseline",
+"run_id": "koko"
+```

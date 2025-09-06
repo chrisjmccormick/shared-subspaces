@@ -9,6 +9,11 @@
 
 set -euo pipefail
 
+# Accept ToS for Anaconda channels
+# Remove these lines (not supported on macOS)
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
 ENV_NAME="shared-subspace"
 PY_VER="3.11"
 REQUIREMENTS_FILE="${1:-requirements.txt}"

@@ -61,7 +61,11 @@
 	"max_seq_length":    128,
 	"eval_batch_size":   64,
 	
-    "fp16":              true
+    "fp16":              true,
+
+    "best_checkpoint": "checkpoints/mla_baseline/checkpoint-50000",
+    "run_name": "mla-o_baseline",
+    "run_id": "koko"
   },
   
   "fine_tune": {
