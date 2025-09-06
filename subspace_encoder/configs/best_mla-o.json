@@ -1,5 +1,5 @@
 {
-  "shorthand": "rd.32 - 6.mla.64.32.64 - mlp.1024 - model.256.lyr.6 - ah.8.32",
+  "shorthand": "rd.32 - 6.mla-o.64.32.64 - mlp.1024 - model.256.lyr.6 - ah.8.32",
   
   "notes": "Current top-performing MLA-o configuration",
   
@@ -44,7 +44,7 @@
   },
   
   "pre_train": {
-    "output_dir":           "checkpoints/mla_baseline",
+    "output_dir":           "checkpoints/mla-o_baseline",
 	"seed":                 42,
 	
     "train_batch_size":     256,
@@ -67,7 +67,7 @@
     "torch_compile_backend": "inductor",
     "torch_compile_mode":   "default",
 
-    "best_checkpoint": "checkpoints/mla_baseline/checkpoint-50000",
+    "best_checkpoint": "checkpoints/mla-o_baseline/checkpoint-50000",
     "run_name": "mla-o_baseline",
     "run_id": "koko",
 
@@ -84,6 +84,12 @@
 	"seed":         42,
     "max_length":   128,
     "weight_decay": 0,
-	"warmup_ratio": 0
+	"warmup_ratio": 0,
+
+    "fp16":                 false,
+    "bf16":                 true,
+    "torch_compile":        true,
+    "torch_compile_backend": "inductor",
+    "torch_compile_mode":   "default"
   }
 }

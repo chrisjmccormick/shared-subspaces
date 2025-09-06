@@ -218,3 +218,6 @@ subspace_encoder/trainer_output/
 # macOS metadata
 .DS_Store
 */.DS_Store
+
+# miniconda file
+miniconda.sh

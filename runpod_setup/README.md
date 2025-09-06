@@ -39,6 +39,7 @@ chmod +x runpod_setup/setup_dev_env.sh
 - Set wandb token using
 ```
 wandb login
+huggingface-cli login
 ```
 - set `WANDB_MODE` to `online` to ensure logs are sent to wandb.
 ```

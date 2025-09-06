@@ -218,5 +218,17 @@ These are the highest scoring configurations of the three variants:
 
 Pre-training metrics are logged to wandb under the project `encoder-pretrain`, and fine-tuning metrics to `encoder-pretrain-sst2`.
 
+To push the best checkpoint manually to huggingface:
+```
+# 1. Make sure you’re logged in
+huggingface-cli login
+
+# 2. Run the script (points to your training config)
+python scripts/push_best_checkpoint.py configs/best_mla.json \
+  --branch main \
+  --repo-type model \
+  --private  # optional
+```
+
 
 
