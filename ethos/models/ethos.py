@@ -51,15 +51,19 @@ class DeepseekV3RotaryEmbedding(nn.Module):
         t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
         freqs = torch.outer(t, self.inv_freq)
         emb = torch.cat((freqs, freqs), dim=-1)
-        self.cos_cached = emb.cos().to(dtype)
-        self.sin_cached = emb.sin().to(dtype)
+        cos_cached = emb.cos().to(dtype)
+        sin_cached = emb.sin().to(dtype)
+        
+        # Register as buffers so they automatically follow the module's device
+        self.register_buffer("cos_cached", cos_cached, persistent=False)
+        self.register_buffer("sin_cached", sin_cached, persistent=False)
 
     def forward(self, x, seq_len=None):
         if self.cos_cached is None or seq_len > self.cos_cached.shape[0]:
             self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
         return (
-            self.cos_cached[:seq_len].to(dtype=x.dtype),
-            self.sin_cached[:seq_len].to(dtype=x.dtype),
+            self.cos_cached[:seq_len].to(device=x.device, dtype=x.dtype),
+            self.sin_cached[:seq_len].to(device=x.device, dtype=x.dtype),
         )
 
 
@@ -73,8 +77,9 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
     if position_ids.dim() == 1:
         position_ids = position_ids.unsqueeze(0)
     
-    cos = cos[position_ids].unsqueeze(1)
-    sin = sin[position_ids].unsqueeze(1)
+    # Ensure cos and sin are on the same device as position_ids
+    cos = cos.to(position_ids.device)[position_ids].unsqueeze(1)
+    sin = sin.to(position_ids.device)[position_ids].unsqueeze(1)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
