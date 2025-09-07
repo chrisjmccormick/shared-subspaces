@@ -12,7 +12,7 @@ import torch.nn as nn
 import triton
 import triton.language as tl
 
-from model import ExpertGenerationNetwork, ProductKeyRouter
+from .ethos import ExpertGenerationNetwork, ProductKeyRouter
 
 
 @triton.jit
@@ -129,7 +129,7 @@ class FusedLowRankMoE_Reordered(nn.Module):
     """
     def __init__(self, config):
         super().__init__()
-        self.d_model = config.d_model
+        self.d_model = config.hidden_size
         self.num_experts = config.num_experts
         self.top_k = config.top_k
         self.num_heads = config.num_routing_heads

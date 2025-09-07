@@ -37,8 +37,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import our custom ETHOS model
-from ethos.models.configuration_ethos import EthosConfig
-from ethos.models.ethos import EthosForCausalLM
+from models.configuration_ethos import EthosConfig
+from models.ethos import EthosForCausalLM
 
 import torch.nn as nn
 

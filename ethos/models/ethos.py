@@ -85,7 +85,7 @@ class DeepseekV3Attention(nn.Module):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
-        self.num_heads = config.num_heads
+        self.num_heads = config.num_attention_heads
         self.q_lora_rank = config.q_lora_rank
         self.qk_rope_head_dim = config.qk_rope_head_dim
         self.kv_lora_rank = config.kv_lora_rank
@@ -248,7 +248,7 @@ class FFN(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.w1 = nn.Linear(config.hidden_size,config.intermediate_size, bias=False)
-        self.w2 = nn.Linear(config.d_ffn_intermediate, config.hidden_size, bias=False)
+        self.w2 = nn.Linear(config.intermediate_size, config.hidden_size, bias=False)
         self.w3 = nn.Linear(config.hidden_size,config.intermediate_size, bias=False)
 
     def forward(self, x):
@@ -274,7 +274,7 @@ class LowRankMoE_TwoLatents(nn.Module):
     """
     def __init__(self, config):
         super().__init__()
-        self.d_model   = config.d_model
+        self.d_model   = config.hidden_size
         self.d_hidden  = config.d_intermediate_hypernet
         self.num_heads = config.num_routing_heads
         self.top_k     = config.top_k
@@ -318,7 +318,7 @@ class LowRankMoE_TwoLatents(nn.Module):
         a     = act * scores                                    # [B*S, H, K]
 
         # Weighted sum of output activations
-        rec_sum = einsum('bhk,bhkd->bd', a, rec_out)            # [B*S, d_hidden]
+        rec_sum = torch.einsum('bhk,bhkd->bd', a, rec_out)            # [B*S, d_hidden]
 
         # Project back to model space
         out_flat = self.W_down(rec_sum)                         # [B*S, d_model]
@@ -425,7 +425,7 @@ class TransformerBlock(nn.Module):
         # Import FusedLowRankMoE_Reordered from kernels.py when needed
         if is_moe_layer:
             if config.use_triton:
-                from kernels import FusedLowRankMoE_Reordered
+                from .kernels import FusedLowRankMoE_Reordered
                 self.mlp = FusedLowRankMoE_Reordered(config)
             else:
                 self.mlp = LowRankMoE_TwoLatents(config)
@@ -484,9 +484,6 @@ class EthosModel(EthosPreTrainedModel):
         self.layers = nn.ModuleList(layers)
         
         self.norm = DeepseekV3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        # Tie weights between embeddings and output layer
-        self.embed_tokens.weight = self.lm_head.weight
 
     def forward(
         self,
@@ -508,11 +505,13 @@ class EthosModel(EthosPreTrainedModel):
             batch_size, seq_len = h.shape[:2]
 
         if attention_mask is None:
-            attention_mask = torch.full((seq_len, seq_len), float("-inf"), device=h.device, dtype=h.dtype)
+            # Create causal mask: 0 for allowed positions, -inf for masked positions
+            attention_mask = torch.full((1, 1, seq_len, seq_len), float("-inf"), device=h.device, dtype=h.dtype)
             attention_mask = torch.triu(attention_mask, diagonal=1)
         
         if position_ids is None:
             position_ids = torch.arange(0, seq_len, dtype=torch.long, device=h.device)
+            position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
 
         for layer in self.layers:
             h = layer(h, attention_mask, position_ids)
@@ -541,6 +540,10 @@ class EthosForCausalLM(EthosPreTrainedModel):
         self.model = EthosModel(config)
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        
+        # Tie weights between embeddings and output layer
+        if config.tie_word_embeddings:
+            self.lm_head.weight = self.model.embed_tokens.weight
 
         # Initialize weights and apply final processing
         self.post_init()
