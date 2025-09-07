@@ -46,6 +46,7 @@ class EthosConfig(PretrainedConfig):
         max_seq_len=4096,
         rms_norm_eps=1e-6,
         rope_theta=10000.0,
+        attention_backend="flash_attention_2",
         use_triton=False,
         pad_token_id=50256,
         bos_token_id=50256,
@@ -87,6 +88,7 @@ class EthosConfig(PretrainedConfig):
         self.rms_norm_eps = rms_norm_eps
         
         # Implementation options
+        self.attention_backend = attention_backend
         self.use_triton = use_triton
         
         super().__init__(

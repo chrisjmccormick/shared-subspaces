@@ -28,6 +28,42 @@ from utils import summarize_parameters, format_size
 # To disable a warning.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+
+class RouterStatsCallback(TrainerCallback):
+    """Callback to log MoE router statistics during training."""
+    
+    def __init__(self, log_every_n_steps=100):
+        self.log_every_n_steps = log_every_n_steps
+    
+    def on_step_end(self, args, state, control, model=None, **kwargs):
+        """Called at the end of each training step."""
+        if state.global_step % self.log_every_n_steps == 0:
+            try:
+                # Access the transformer layers (handle both wrapped and unwrapped models)
+                if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+                    layers = model.model.layers  # EthosForCausalLM case
+                elif hasattr(model, 'layers'):
+                    layers = model.layers  # Direct EthosModel case
+                else:
+                    print(f"Warning: Cannot find model layers for router stats logging")
+                    return
+                
+                # Log each router separately.
+                router_stats_logged = False
+                for i, layer in enumerate(layers):
+                    # If it's an moe layer,
+                    if hasattr(layer.mlp, "router"):
+                        stats = layer.mlp.router.consume_stats()
+                        # Log to wandb with the current step
+                        wandb.log({f"moe_layer{i}/{k}": v for k, v in stats.items()}, step=state.global_step)
+                        router_stats_logged = True
+                
+                if not router_stats_logged:
+                    print(f"Warning: No MoE layers with routers found at step {state.global_step}")
+                    
+            except Exception as e:
+                print(f"Error logging router stats at step {state.global_step}: {e}")
+
 # Make sure we can import modules from the decoder package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -279,6 +315,7 @@ def main(config_path: str):
         config=full_cfg
     )
 
+
     # ===============================
     #       Training Arguments
     # ===============================
@@ -405,6 +442,9 @@ def main(config_path: str):
     # ===============================
     #           Trainer
     # ===============================
+    # Create router stats callback
+    router_stats_callback = RouterStatsCallback(log_every_n_steps=100)
+    
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -416,6 +456,7 @@ def main(config_path: str):
         processing_class=tokenizer,
 
         data_collator=data_collator,
+        callbacks=[router_stats_callback],
     )
 
     """## Loop"""

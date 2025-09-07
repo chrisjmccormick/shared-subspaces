@@ -42,8 +42,7 @@ class DeepseekV3RotaryEmbedding(nn.Module):
         self.base = base
         inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
         self.register_buffer("inv_freq", inv_freq, persistent=False)
-        self.cos_cached = None
-        self.sin_cached = None
+        self.max_seq_len_cached = 0
         self._set_cos_sin_cache(seq_len=max_position_embeddings, device=device, dtype=torch.get_default_dtype())
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
@@ -59,7 +58,9 @@ class DeepseekV3RotaryEmbedding(nn.Module):
         self.register_buffer("sin_cached", sin_cached, persistent=False)
 
     def forward(self, x, seq_len=None):
-        if self.cos_cached is None or seq_len > self.cos_cached.shape[0]:
+        if seq_len is None:
+            seq_len = x.shape[1]
+        if not hasattr(self, 'cos_cached') or seq_len > self.max_seq_len_cached:
             self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
         return (
             self.cos_cached[:seq_len].to(device=x.device, dtype=x.dtype),
@@ -138,32 +139,40 @@ class DeepseekV3Attention(nn.Module):
         key_states = torch.cat([k_nope.transpose(1, 2), k_pe.expand(bsz, self.num_heads, q_len, self.qk_rope_head_dim)], dim=-1)
         value_states = value_states.transpose(1, 2)
 
-        # Use Flash Attention if available
-        try:
-            from flash_attn import flash_attn_func
-            
-            query_states = query_states.transpose(1, 2).contiguous()
-            key_states = key_states.transpose(1, 2).contiguous()
-            value_states = value_states.transpose(1, 2).contiguous()
-            
-            if self.q_head_dim != self.v_head_dim:
-                value_states = F.pad(value_states, [0, self.q_head_dim - self.v_head_dim])
-            
-            attn_output = flash_attn_func(
-                query_states,
-                key_states,
-                value_states,
-                dropout_p=self.attention_dropout if self.training else 0.0,
-                softmax_scale=self.softmax_scale,
-                causal=self.is_causal
-            )
-            
-            if self.q_head_dim != self.v_head_dim:
-                attn_output = attn_output[:, :, :, :self.v_head_dim]
-            
-            attn_output = attn_output.reshape(bsz, q_len, self.num_heads * self.v_head_dim)
-        except ImportError:
-            # Fallback to standard attention
+        # Choose attention backend based on config
+        attention_backend = getattr(self.config, 'attention_backend', 'sdpa')
+        
+        if attention_backend == "flash_attention_2":
+            try:
+                from flash_attn import flash_attn_func
+                
+                query_states_fa = query_states.transpose(1, 2).contiguous()
+                key_states_fa = key_states.transpose(1, 2).contiguous()
+                value_states_fa = value_states.transpose(1, 2).contiguous()
+                
+                if self.q_head_dim != self.v_head_dim:
+                    value_states_fa = F.pad(value_states_fa, [0, self.q_head_dim - self.v_head_dim])
+                
+                attn_output = flash_attn_func(
+                    query_states_fa,
+                    key_states_fa,
+                    value_states_fa,
+                    dropout_p=self.attention_dropout if self.training else 0.0,
+                    softmax_scale=self.softmax_scale,
+                    causal=self.is_causal
+                )
+                
+                if self.q_head_dim != self.v_head_dim:
+                    attn_output = attn_output[:, :, :, :self.v_head_dim]
+                
+                attn_output = attn_output.reshape(bsz, q_len, self.num_heads * self.v_head_dim)
+            except ImportError:
+                print("Warning: flash_attn not available, falling back to standard attention")
+                # Fall through to standard attention
+                attention_backend = "standard"
+        
+        if attention_backend == "standard":
+            # Standard attention implementation
             attn_weights = torch.matmul(query_states, key_states.transpose(-2, -1)) * self.softmax_scale
             attn_weights = attn_weights + attention_mask
             attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
@@ -171,6 +180,23 @@ class DeepseekV3Attention(nn.Module):
             attn_output = attn_output.transpose(1, 2).contiguous()
             attn_output = attn_output.reshape(bsz, q_len, self.num_heads * self.v_head_dim)
         
+        elif attention_backend in ["sdpa", "scaled_dot_product"]:
+            # PyTorch scaled_dot_product_attention (default)
+            q = query_states.contiguous()
+            k = key_states.contiguous()
+            v = value_states.contiguous()
+
+            attn_out = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=None,
+                dropout_p=self.attention_dropout if self.training else 0.0,
+                is_causal=self.is_causal,
+                scale=self.softmax_scale if hasattr(self, "softmax_scale") else None,
+            )
+            
+            # Merge heads back to [B, T, H*Dv]
+            attn_output = attn_out.transpose(1, 2).contiguous().reshape(bsz, q_len, self.num_heads * self.v_head_dim)
+
         return self.o_proj(attn_output)
 
 
@@ -199,6 +225,13 @@ class ProductKeyRouter(nn.Module):
         # Shared sub-keys across heads
         self.sub_keys_1 = nn.Embedding(self.num_sub_keys, self.d_query // 2)
         self.sub_keys_2 = nn.Embedding(self.num_sub_keys, self.d_query // 2)
+
+        # ── Utilisation buffers (NOT part of state_dict) ─────
+        self.register_buffer(
+            "_route_counts", torch.zeros(self.num_experts, dtype=torch.long),
+            persistent=False)
+        self._token_accumulator = 0  # scalar int
+
 
     def forward(self, x_flat):
         batch_seq_len = x_flat.shape[0]
@@ -245,9 +278,45 @@ class ProductKeyRouter(nn.Module):
         # Stack results: [batch*seq, num_heads, top_k]
         all_scores = torch.stack(all_scores, dim=1)
         all_indices = torch.stack(all_indices, dim=1)
-        
+
+        # ── Update utilisation stats (no grad) ───────────────
+        # In ProductKeyRouter.forward()
+        with torch.no_grad():
+            flat_ids = all_indices.view(-1)
+            self._route_counts.scatter_add_(0,
+                flat_ids,
+                torch.ones_like(flat_ids, dtype=self._route_counts.dtype))
+            
+            # Count the number of tokens routed in the batch
+            self._token_accumulator += x_flat.shape[0] 
+
+
         return all_scores, all_indices
 
+    # ─────────────────────────────────────────────────────────
+    # Stats helper
+    # ─────────────────────────────────────────────────────────
+    def consume_stats(self):
+        """
+        Return a dict of utilisation metrics **and reset counters**.
+        Safe to call in distributed mode (stats are local to rank).
+        """
+        counts = self._route_counts.float()
+        tot    = counts.sum().clamp_min(1.0)
+        p      = counts / tot
+        entropy = (-p * p.clamp_min(1e-12).log()).sum().item()
+        active_frac = (counts > 0).float().mean().item()
+
+        stats = dict(
+            routing_entropy       = entropy,
+            avg_tokens_per_expert = tot.item() / self.num_experts,
+            active_expert_frac    = active_frac,
+        )
+
+        # reset
+        self._route_counts.zero_()
+        self._token_accumulator = 0
+        return stats
 
 class FFN(nn.Module):
     def __init__(self, config):
