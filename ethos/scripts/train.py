@@ -155,7 +155,7 @@ def main(config_path: str):
             add_special_tokens=False,
         )
     
-    # 2) Group into contiguous 1024-token blocks (concat + chunk)
+    # 2) Group into contiguous blocks (concat + chunk)
     def group_texts(examples):
         # Flatten and insert EOS between documents to avoid cross-article bleed
         input_ids = []
@@ -199,47 +199,6 @@ def main(config_path: str):
     data_collator = default_data_collator
 
 
-    """
-
-    Below is the standard approach, no concatenation.
-    
-    # ======================
-    #    Prepare Dataset
-    # ======================
-
-    
-    dataset = load_dataset(
-        ptrain_cfg["dataset_name"],
-        ptrain_cfg["dataset_config"]
-    )
-
-    # Print the dataset object to see sample counts.
-    print(dataset)
-
-    def tokenize_function(examples):
-        return tokenizer(
-            examples["text"],
-            truncation=True,
-            max_length=ptrain_cfg["max_seq_length"],
-            padding="max_length"
-        )
-
-    # Tokenize the full dataset
-    tokenized = dataset.map(
-        tokenize_function,
-        batched=True,
-        num_proc=8, # Use more CPUs to speed it up--this helps a lot.
-        remove_columns=["text"] # Comment this
-    )
-
-    # Use DataCollatorForLanguageModeling with mlm=False for causal LM
-    # Use DataCollatorForLanguageModeling with mlm=False for causal LM
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,  # Disable masking for causal LM
-        mlm=False,  # Disable masking for causal LM
-    )
-    """
 
     # ========================
     #    Initialize Model
@@ -360,7 +319,6 @@ def main(config_path: str):
         eval_strategy="steps",
         eval_steps=ptrain_cfg.get("eval_steps", 2000),
         eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
-        eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
 
         logging_steps=50,
         metric_for_best_model="eval_loss",
@@ -442,72 +400,6 @@ def main(config_path: str):
 
     # Instantiate your stateful metric computer
     perplexity_metric = PerplexityMetric()
-    import numpy as np
-
-    class PerplexityMetric:
-        """
-        A stateful class to compute perplexity in a batch-wise manner to avoid OOM.
-        Similar to the MLMAccuracyMetric from the encoder training.
-        """
-        def __init__(self):
-            # Initialize state variables to store running totals
-            self.total_loss = 0.0
-            self.total_tokens = 0
-
-        def __call__(self, eval_pred, compute_result=False):
-            """
-            This method will be called by the Trainer.
-            """
-            predictions, labels = eval_pred
-
-            # For causal LM, we compute perplexity
-            # Shift predictions and labels for next token prediction
-            shift_logits = predictions[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            
-            # Flatten the tokens
-            shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-            shift_labels = shift_labels.view(-1)
-            
-            # Create a mask for valid tokens (not padding, typically -100)
-            mask = shift_labels != -100
-            
-            if mask.sum() > 0:  # Only compute if there are valid tokens
-                # Compute loss only on valid tokens
-                loss_fct = torch.nn.CrossEntropyLoss(reduction='sum')
-                batch_loss = loss_fct(shift_logits[mask], shift_labels[mask])
-                
-                # Add to running totals
-                self.total_loss += batch_loss.item()
-                self.total_tokens += mask.sum().item()
-
-            # If this is the final call after all batches are processed
-            if compute_result:
-                # Avoid division by zero
-                if self.total_tokens == 0:
-                    avg_loss = 0.0
-                    perplexity = float('inf')
-                else:
-                    avg_loss = self.total_loss / self.total_tokens
-                    perplexity = np.exp(avg_loss)
-
-                # Prepare the final metrics dictionary
-                metrics = {
-                    "perplexity": perplexity,
-                    "loss": avg_loss,
-                }
-
-                # Reset state for the next evaluation run
-                self.total_loss = 0.0
-                self.total_tokens = 0
-
-                return metrics
-
-            # For intermediate calls, return an empty dict
-            return {}
-
-    # Instantiate your stateful metric computer
-    perplexity_metric = PerplexityMetric()
 
     # ===============================
     #           Trainer
@@ -517,7 +409,6 @@ def main(config_path: str):
         args=training_args,
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["validation"],
-        compute_metrics=perplexity_metric,
         compute_metrics=perplexity_metric,
 
         # New argument, allows for other modalities.
