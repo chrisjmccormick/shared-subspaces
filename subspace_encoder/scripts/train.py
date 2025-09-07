@@ -221,9 +221,6 @@ def main(config_path: str):
         save_steps=2000,
         save_total_limit=2,           # Optional: keeps last 2 checkpoints
         save_strategy="steps",
-        load_best_model_at_end=True,
-        greater_is_better=True,
-
         
         report_to=["wandb"],
         
@@ -238,13 +235,6 @@ def main(config_path: str):
 
         # Set seed before dataloaders are initialized.
         seed=ptrain_cfg["seed"],
-
-        # Push to hub configuration (disabled by default)
-        # Set them in the config file to push trained models to the HuggingFace hub.
-        push_to_hub=ptrain_cfg.get("push_to_hub", False),
-        hub_model_id=ptrain_cfg.get("hub_model_id", None),
-        hub_strategy=ptrain_cfg.get("hub_strategy", "every_save")
-
     )
 
     print(training_args)

@@ -65,15 +65,7 @@
     "bf16":                 true,
     "torch_compile":        true,
     "torch_compile_backend": "inductor",
-    "torch_compile_mode":   "default",
-
-    "best_checkpoint": "checkpoints/mla-o_baseline/checkpoint-50000",
-    "run_name": "mla-o_baseline",
-    "run_id": "koko",
-
-    "push_to_hub":          true,
-    "hub_model_id":         "kokolamba/encoder-mla-o-baseline-perf",
-    "hub_strategy":         "end"
+    "torch_compile_mode":   "default"
   },
   
   "fine_tune": {

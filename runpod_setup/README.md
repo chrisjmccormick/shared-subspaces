@@ -48,8 +48,10 @@ export WANDB_MODE=online
 
 5. ADD the following to the pretrain config in `best_mla.json` and `best_mla-o.json`
 >NOTE: Ensure to remove them when done training from the config files.
+- Point to best checkpoint locally by setting `best_checkpoint` in the config files.
+- The other two `run_name` and `run_id` are crucial for successfully pushing pretraining/finetuning runs to `wandb`.
 ```
-"best_checkpoint": "checkpoints/mla_baseline/checkpoint-50000",
+"best_checkpoint": "<path-to-checkpoints>", # example checkpoints/mla_baseline/checkpoint-50000"
 "run_name": "mla-o_baseline",
-"run_id": "koko"
+"run_id": "<example-name>", # example koko
 ```

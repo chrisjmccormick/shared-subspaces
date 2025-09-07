@@ -1,12 +1,3 @@
-#!/usr/bin/env bash
-#
-# One-shot script to create a conda env + install requirements
-# Usage:
-#   ./scripts/setup_conda.sh [requirements_file]
-#
-# If no requirements file is provided, defaults to ./requirements.txt
-#
-
 set -euo pipefail
 
 # Accept ToS for Anaconda channels

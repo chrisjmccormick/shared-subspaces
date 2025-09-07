@@ -220,8 +220,13 @@ Pre-training metrics are logged to wandb under the project `encoder-pretrain`, a
 
 To push the best checkpoint manually to huggingface:
 ```
-# 1. Make sure you’re logged in
+# 1. Make sure you’re logged in using:
+```
 huggingface-cli login
+OR
+export HUGGINGFACE_HUB_TOKEN=<your-huggingface-token>
+```
+
 
 # 2. Run the script (points to your training config)
 python scripts/push_best_checkpoint.py configs/best_mla.json \
@@ -229,6 +234,3 @@ python scripts/push_best_checkpoint.py configs/best_mla.json \
   --repo-type model \
   --private  # optional
 ```
-
-
-
