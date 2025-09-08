@@ -1,6 +1,6 @@
 {
-  "shorthand": "seqlen.128 - mla.96.64 - mlp.1024 - model.256.lyr.6 - ah.8.32",
-  "notes": "Baseline ETHOS model.",
+  "shorthand": "1-latent-triton - seqlen.128 - mla.96.64 - mlp.1024 - model.256.lyr.6 - ah.8.32",
+  "notes": "Baseline ETHOS model with one latent per expert with triton implementation.",
   "model": {
     "hidden_size": 256,
     "num_hidden_layers": 6,
@@ -9,6 +9,7 @@
     "num_dense_layers": 1,
     "num_experts": 65536,
     "d_latent": 32,
+    "use_triton": true,
     "d_intermediate_hypernet": 128,
     "top_k": 8,
     "num_routing_heads": 4,
@@ -40,7 +41,7 @@
     "attention_backend": "flash_attention_2"
   },
   "pre_train": {
-    "output_dir": "checkpoints/ethos_baseline",
+    "output_dir": "checkpoints/ethos_baseline_1latent_triton",
     "seed": 42,
     "train_batch_size": 512,
     "gradient_accumulation_steps": 2,
@@ -90,7 +91,7 @@
     },
     "seed": 42,
     "max_seq_length": 128,
-    "output_dir": "checkpoints/ethos_baseline/ft_sst2",
-    "run_name": "ft-sst2 - seqlen.128 - mla.96.64 - mlp.1024 - model.256.lyr.6 - ah.8.32"
+    "output_dir": "checkpoints/ethos_baseline_1latent_triton/ft_sst2",
+    "run_name": "ft-sst2 - 1latent - triton - seqlen.128 - mla.96.64 - mlp.1024 - model.256.lyr.6 - ah.8.32"
   }
 }
