@@ -1,5 +1,5 @@
 {
-  "shorthand": "rd.32 - 6.mla.64.32.64 - mlp.1024 - model.256.lyr.6 - ah.8.32",
+  "shorthand": "rd.32 - 6.mla-o.64.32.64 - mlp.1024 - model.256.lyr.6 - ah.8.32",
   
   "notes": "Current top-performing MLA-o configuration",
   
@@ -44,24 +44,28 @@
   },
   
   "pre_train": {
-    "output_dir":        "checkpoints/mla_baseline",
-	"seed":              42,
+    "output_dir":           "checkpoints/mla-o_baseline",
+	"seed":                 42,
 	
-    "train_batch_size":  256,
-    "learning_rate":     5e-4,
-    "num_train_steps":   50000,
-	"eval_steps":        2000,
-	"weight_decay":      0.01,
+    "train_batch_size":     256,
+    "learning_rate":        5e-4,
+    "num_train_steps":      50000,
+	"eval_steps":           2000,
+	"weight_decay":         0.01,
 	
 	
-    "mlm_probability":   0.15,
-    "dataset_name":      "wikitext",
-    "dataset_config":    "wikitext-103-raw-v1",
+    "mlm_probability":      0.15,
+    "dataset_name":         "wikitext",
+    "dataset_config":       "wikitext-103-raw-v1",
     
-	"max_seq_length":    128,
-	"eval_batch_size":   64,
+	"max_seq_length":       128,
+	"eval_batch_size":      64,
 	
-    "fp16":              true
+    "fp16":                 false,
+    "bf16":                 true,
+    "torch_compile":        true,
+    "torch_compile_backend": "inductor",
+    "torch_compile_mode":   "default"
   },
   
   "fine_tune": {
@@ -72,6 +76,12 @@
 	"seed":         42,
     "max_length":   128,
     "weight_decay": 0,
-	"warmup_ratio": 0
+	"warmup_ratio": 0,
+
+    "fp16":                 false,
+    "bf16":                 true,
+    "torch_compile":        true,
+    "torch_compile_backend": "inductor",
+    "torch_compile_mode":   "default"
   }
 }

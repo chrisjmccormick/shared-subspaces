@@ -187,6 +187,8 @@ def main(config_path: str):
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
 
+        # Either fp16 or bf16 can be enabled, not both.
+        bf16=ptrain_cfg["bf16"],
         fp16=ptrain_cfg["fp16"],
 
         learning_rate=ptrain_cfg["learning_rate"],
@@ -225,6 +227,14 @@ def main(config_path: str):
         run_name=ptrain_cfg["run_name"],
         
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
+
+        # Enable torch compile if specified
+        torch_compile=ptrain_cfg.get("torch_compile", False),
+        torch_compile_backend=ptrain_cfg.get("torch_compile_backend", "inductor"),
+        torch_compile_mode=ptrain_cfg.get("torch_compile_mode", "default"),
+
+        # Set seed before dataloaders are initialized.
+        seed=ptrain_cfg["seed"],
     )
 
     print(training_args)
@@ -310,7 +320,7 @@ def main(config_path: str):
         #compute_metrics=compute_metrics,
         compute_metrics=mlm_accuracy_metric,
         # New argument, allows for other modalities.
-        processing_class=tokenizer,
+        tokenizer=tokenizer,
 
         data_collator=data_collator,
     )

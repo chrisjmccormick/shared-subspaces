@@ -1,8 +1,18 @@
 import os
+from pathlib import Path
+import sys  
 
 # Disable tensorflow to avoid noisy warnings
 # (Though this doesn't seem to work)
 os.environ["TRANSFORMERS_NO_TF"] = "1"
+
+# Make sure we can import modules from the encoder-pretrain package
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+print("PROJECT_ROOT", PROJECT_ROOT)
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import argparse
 import json
@@ -157,6 +167,10 @@ def main():
         per_device_train_batch_size=sft_cfg["batch_size"],
         per_device_eval_batch_size=sft_cfg["batch_size"],
 
+        # Either fp16 or bf16 can be enabled, not both.
+        bf16=sft_cfg["bf16"],
+        fp16=sft_cfg["fp16"],
+
         learning_rate=sft_cfg["lr"],
         lr_scheduler_type="linear",  # Linear warmup then decay
 
@@ -184,6 +198,11 @@ def main():
 
         # Reproducibility
         seed=sft_cfg["seed"],
+
+        # Enable torch compile if specified
+        torch_compile=sft_cfg.get("torch_compile", False),
+        torch_compile_backend=sft_cfg.get("torch_compile_backend", "inductor"),
+        torch_compile_mode=sft_cfg.get("torch_compile_mode", "default"),
     )
 
     # Log the complete config file with the training run.
