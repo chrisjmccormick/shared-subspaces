@@ -229,7 +229,7 @@ export HUGGINGFACE_HUB_TOKEN=<your-huggingface-token>
 
 
 # 2. Run the script (points to your training config)
-python scripts/push_best_checkpoint.py configs/best_mla.json \
+python subspace_encoder/scripts/push_best_checkpoint.py configs/best_mla.json \
   --branch main \
   --repo-type model \
   --private  # optional
