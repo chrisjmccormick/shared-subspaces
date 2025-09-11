@@ -1,29 +1,14 @@
 # -*- coding: utf-8 -*-
 # Fine-tune (SST-2) via LM-head label words, optional LoRA
 
-# ============================================================================
-# IMPORTANT: STYLE GUIDE
-# This is a **prototype**. Don't polish it prematurely.
-# 
-# This means:
-# - Prioritize legibility over re-use and robustness. 
-#     - DO NOT use get_attr. All settings are required. If something is missing,
-#       that was a programmer error, and we want the code to **crash**. 
-#     - Do not clutter the code with "raise ValueError", that's premature.
-#     - We can add those things in later when the code is mature. 
-# 
-# Minimize boiler plate and safety checks.
-# Don't create silent bugs by implementing fallbacks.
-# Comment heavily. 
-# Avoid packing operations into dense, single lines.
-# Prefer flat code to small helper functions. Factorization is for mature code,
-# not prototypes. It requires the developer to invest time and energy into 
-# becoming familiar with what the function does and how to use it.
-#
-# Note that some of the existing code is agent-written and doesn't currently
-# follow these guidelines.
-# ============================================================================
+import os
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["USE_TF"] = "0"              # older check some codepaths still honor
+# Optional: if Keras 3 is on the system and ever gets touched, force non-TF backend
+os.environ.setdefault("KERAS_BACKEND", "torch")
 
+from transformers.utils import is_tf_available
+print("TF available (Transformers thinks):", is_tf_available())  # should be False
 
 import argparse, json, os, sys
 from pathlib import Path
@@ -51,12 +36,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from layers.patch_o_proj import load_checkpoint_state_dict, load_and_patch_model, Variant
 
 from transformers import DeepseekV3Config, DeepseekV3ForCausalLM 
+
 try:
     from peft import LoraConfig, get_peft_model
     PEFT_AVAILABLE = True
 except Exception:
     PEFT_AVAILABLE = False
-
 
 # Setup Weights & Biases
 if "WANDB_MODE" not in os.environ:
