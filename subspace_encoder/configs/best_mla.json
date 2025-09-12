@@ -67,11 +67,7 @@
     "torch_compile_backend": "inductor",
     "torch_compile_mode":   "default",
 
-    "enable_packing":       true,
-
-    "run_name":              "mla-baseline",
-    "run_id":                "koko",
-    "best_checkpoint":       "checkpoints/mla_baseline/checkpoint-50000"
+    "enable_packing":       true
   },
   
   "fine_tune": {
