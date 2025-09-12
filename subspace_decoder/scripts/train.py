@@ -173,8 +173,7 @@ def main(config_path: str):
                 dataset = load_dataset(
                     dataset_name,
                     dataset_config,
-                    streaming=True,
-                    trust_remote_code=True
+                    streaming=True
                 )
             
                 # Calculate number of examples to take (approximate)
@@ -238,7 +237,7 @@ def main(config_path: str):
         else:
             # Load full C4 dataset (not recommended due to size)
             print("Loading full C4 dataset...")
-            dataset = load_dataset(dataset_name, dataset_config, trust_remote_code=True)
+            dataset = load_dataset(dataset_name, dataset_config)
     else:
         # Original logic for wikitext and other datasets
         dataset = load_dataset(dataset_name, dataset_config)
