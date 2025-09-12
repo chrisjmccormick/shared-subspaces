@@ -70,7 +70,8 @@
     "enable_packing":       true,
 
     "run_name":              "mla-o-baseline",
-    "run_id":                "koko"
+    "run_id":                "koko",
+    "best_checkpoint":       "checkpoints/mla-o_baseline/checkpoint-50000"
   },
   
   "fine_tune": {

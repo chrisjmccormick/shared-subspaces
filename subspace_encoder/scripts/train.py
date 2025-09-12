@@ -156,6 +156,7 @@ def main(config_path: str):
             group_texts,
             batched=True,
             num_proc=8,
+            remove_columns=tokenized["train"].column_names,  # drop old columns
         )
 
     # This DataCollator:
