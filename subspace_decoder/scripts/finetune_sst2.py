@@ -33,9 +33,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from layers.patch_o_proj import load_checkpoint_state_dict, load_and_patch_model, Variant
-
-from transformers import DeepseekV3Config, DeepseekV3ForCausalLM 
+from models.shared_space_config import SharedSpaceDecoderConfig, get_config
+from models.shared_space_decoder import SharedSpaceDecoderForCausalLM 
+from layers.task_heads import SharedSpaceDecoderForCausalLM
 
 try:
     from peft import LoraConfig, get_peft_model
@@ -55,7 +55,8 @@ if wandb_api_key:
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", required=True, help="Path to JSON config")
+    ap.add_argument("--sft_config", required=True, help="Path to SFT (fine-tuning) JSON config")
+    ap.add_argument("--model_config", required=True, help="Path to pre-trained model JSON config")
     return ap.parse_args()
 
 
@@ -167,14 +168,24 @@ def map_with_prompt(ds, tokenizer, label_val_to_word, label_val_to_token_id, pro
 
 def main():
     args = parse_args()
-    with open(args.config, "r") as f:
-        cfg = json.load(f)
-
-    full_cfg = cfg
     
-    model_cfg = cfg["model"]
-    ft = cfg.get("fine_tune", {})
-    ptrain_cfg = cfg["pre_train"]
+    # Load separate SFT and model configs
+    with open(args.sft_config, "r") as f:
+        sft_cfg = json.load(f)
+    
+    full_cfg, model_cfg = get_config(args.model_config)
+
+    # Extract components from model config
+    ptrain_cfg = full_cfg["pre_train"]
+    
+    # Extract fine-tune config (with fallbacks from model config if needed)
+    ft = sft_cfg.get("fine_tune", {})
+    
+    # Auto-complete fields from pre-trained model config
+    ft["run_name"] = f"ft-sst2-{ptrain_cfg["run_name"]}"
+    ft["output_dir"] = f"{ptrain_cfg["output_dir"]}/ft_sst2"
+    
+
     seed = ft.get("seed", 42)
     set_seed(seed)
 
@@ -336,9 +347,8 @@ def main():
         pad_to_multiple_of=8  # Ensure consistent padding for efficiency
     )
 
-    # Output dir
-    run_name = cfg.get("pre_train", {}).get("run_name", "pretrain")
-    out_dir = ft.get("output_dir", f"checkpoints/finetune_sst2_{run_name}")
+    # Output dir (already handled in auto-completion above)
+    out_dir = ft.get("output_dir")
 
     # Steps vs epochs
     max_steps = ft.get("max_steps")  # preferred for speed/consistency

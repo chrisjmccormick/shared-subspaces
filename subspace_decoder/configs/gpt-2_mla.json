@@ -1,0 +1,80 @@
+{
+
+  "shorthand": "model.768.lyr.12 - seqlen.128 - mla.192.96.0 - ah12.64 - rd32.32",
+  "notes": "MLA Baseline",
+  
+  "model": {
+  	
+	"hidden_size":          768,
+    "num_hidden_layers":    12,
+    "intermediate_size":    2048,
+    
+	"hidden_dropout_prob":     0.1,
+    "attention_dropout_prob":  0.1,
+    "classifier_dropout":      null,
+        
+    "initializer_range":    0.02,
+    "layer_norm_eps":       1e-12,
+    "rms_norm_eps":         1e-6,
+    "norm_type":            "layernorm",
+
+
+    "pad_token_id":         50256,
+    "bos_token_id":         50256,
+    "eos_token_id":         50256,
+    "tie_word_embeddings":  true,
+    "vocab_size":           50257,
+	"rope_theta":           10000.0,
+    "rope_scaling":         null,
+	"max_position_embeddings":  128,
+
+	"num_dense_layers":   1,	
+    "q_shared_dim":       192,	
+    "kv_shared_dim":      96,
+    "o_shared_dim":       192,
+    
+	"num_attention_heads":  12,
+	"rope_dims":            32,
+	"qk_private_dim":       64,
+	"vo_private_dim":       64,
+	"nope_dims":            32,
+	"attention_bias":       false,	
+	
+
+	
+    "attention_backend": "flash_attention_2",
+
+    "ffn_decompose":     false,
+    "ffn_rank":          null,
+	
+	"vocab_subspace":   false,
+	"vocab_rank":        192
+  },
+  
+  "pre_train": {
+    "output_dir":           "checkpoints/model_576_lyr_10_seqlen128_mla-o_q192_kv96_o192",
+	"seed":                 42,
+		
+    "train_batch_size":     128,
+    "gradient_accumulation_steps": 8,
+    "learning_rate":        5e-04,
+    "num_train_steps":      12500,
+    "eval_steps":           1000,
+    "weight_decay":         0.01,
+    "num_workers":          8,
+    "pin_memory":           true,
+
+    "dataset_name":         "wikitext",
+    "dataset_config":       "wikitext-103-raw-v1",
+    
+	"max_seq_length":       128,
+	"eval_batch_size":      64,
+	
+    "fp16":                 false,
+    "bf16":                 true,
+    "torch_compile":        true,
+    "torch_compile_backend": "inductor",
+    "torch_compile_mode":   "default"
+  }
+
+}

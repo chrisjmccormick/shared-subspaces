@@ -47,9 +47,8 @@ print("PROJECT_ROOT", PROJECT_ROOT)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from layers.patch_o_proj import patch_o_proj_implementation
-
-from transformers import DeepseekV3Config, DeepseekV3ForCausalLM
+from models.shared_space_config import SharedSpaceDecoderConfig, get_config
+from layers.task_heads import SharedSpaceDecoderForCausalLM
 
 import torch.nn as nn
 
@@ -85,10 +84,8 @@ def main(config_path: str):
     """Run pre-training using the provided configuration path."""
     
     # Load configuration
-    with open(config_path, 'r') as f:
-        full_cfg = json.load(f)
+    full_cfg, model_cfg = get_config(config_path)
 
-    model_cfg = full_cfg['model']
     ptrain_cfg = full_cfg['pre_train']
 
     # Print out its shorthand name.
@@ -211,31 +208,13 @@ def main(config_path: str):
     data_collator = default_data_collator
 
 
-
     # ========================
     #    Initialize Model
     # ========================
 
     print("Initializing model...")
 
-    # Strip patch-only keys from HF config
-    lib_cfg_dict = {
-        k: v for k, v in model_cfg.items()
-        if k not in ["use_output_subspace", "o_latent_dim", "o_proj_variant"]
-    }
-
-    # Define the library config and model.
-    lib_cfg = DeepseekV3Config(**lib_cfg_dict)
-    model = DeepseekV3ForCausalLM(lib_cfg)
-
-    if model_cfg['o_proj_variant'] != "vanilla":
-        # Apply the changes based on the variant
-        patch_o_proj_implementation(
-            model, 
-            model_cfg["o_proj_variant"],
-            model_cfg["o_latent_dim"],
-            model_cfg["rms_norm_eps"]
-        )
+    model = SharedSpaceDecoderForCausalLM(model_cfg)
 
     # ================================
     #       Review Configuration
