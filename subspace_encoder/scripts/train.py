@@ -76,9 +76,9 @@ def main(config_path: str):
     if wandb_api_key:
         wandb.login(key=wandb_api_key)
 
-    # ======================
+    # ====================== 
     #    Prepare Dataset
-    # ======================
+    # =====================
 
     dataset = load_dataset(
         ptrain_cfg["dataset_name"],
@@ -88,23 +88,79 @@ def main(config_path: str):
     # Print the dataset object to see sample counts.
     print(dataset)
 
-    def tokenize_function(examples):
-        return tokenizer(
-            examples["text"],
-            truncation=True,
-            max_length=ptrain_cfg["max_seq_length"]
+    # Here we decide whether to use efficient sequence packing or not.
+    # If not, we simply truncate to max_seq_length.
+    # If so, we concatenate documents and split into equal-sized blocks.
+    # Sequence packing can be much more efficient, especially for short documents.
+    if not ptrain_cfg.get("enable_packing", False):
+        def tokenize_function(examples):
+            return tokenizer(
+                examples["text"],
+                truncation=True,
+                max_length=ptrain_cfg["max_seq_length"]
+            )
+
+        # Tokenizes the full dataset.
+        tokenized = dataset.map(
+            tokenize_function,
+            batched=True,
+            num_proc=8, # Use more CPUs to speed it up--this helps a lot.
+            remove_columns=["text"] # Comment this
+        )
+    else:
+        print("\nUsing efficient sequence packing...\n")
+        block_size = ptrain_cfg["max_seq_length"]
+        sep_token_id = tokenizer.sep_token_id
+
+        # 1) Tokenize without truncation/padding
+        def tokenize_function(examples):
+            # add_special_tokens=False keeps things raw; we’ll insert SEP between docs
+            return tokenizer(
+                examples["text"],
+                add_special_tokens=False,
+            )
+
+        # 2) Group into contiguous blocks (concat + chunk)
+        def group_texts(examples):
+            # Flatten and insert SEP between documents
+            input_ids = []
+            for ids in examples["input_ids"]:
+                if len(ids) > 0:
+                    input_ids.extend(ids)
+                # add a SEP fencepost between docs
+                input_ids.append(sep_token_id)
+
+            # Drop the trailing partial block so every example is full length
+            total_length = (len(input_ids) // block_size) * block_size
+            input_ids = input_ids[:total_length]
+
+            # Split into equal blocks
+            result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
+            
+            # For MLM, we only need to return input_ids.
+            # The DataCollator will create attention_mask and labels (with masking).
+            return {
+                "input_ids": result_input_ids,
+            }
+
+        # Tokenize
+        tokenized = dataset.map(
+            tokenize_function,
+            batched=True,
+            num_proc=8,
+            remove_columns=dataset["train"].column_names,  # drop raw "text"
+        )
+        
+        # Concatenate + chunk
+        tokenized = tokenized.map(
+            group_texts,
+            batched=True,
+            num_proc=8,
+            remove_columns=tokenized["train"].column_names,  # drop old columns
         )
 
-    # Tokenizes the full dataset.
-    tokenized = dataset.map(
-        tokenize_function,
-        batched=True,
-        num_proc=8, # Use more CPUs to speed it up--this helps a lot.
-        remove_columns=["text"] # Comment this
-    )
-
     # This DataCollator:
-    # - Pads examples in a batch to the same length
+    # - Pads examples in a batch to the same length (if not using packing)
     # - Applies BERT's Masked Language Modeling, replacing random tokens with
     #   [MASK]. Enabled by setting `mlm_probability`.
     # - Returns input_ids, labels, and attention_mask for MLM training
@@ -113,13 +169,13 @@ def main(config_path: str):
         mlm_probability=ptrain_cfg["mlm_probability"] # Default is 15%
     )
 
-    # ========================
+    # ======================== 
     #    Initialize Model
     # ========================
 
     model = SharedSpaceEncoderForMaskedLM(model_cfg)
 
-    # ================================
+    # ================================ 
     #       Review Configuration
     # ================================
 
@@ -154,7 +210,7 @@ def main(config_path: str):
     # Display a full parameter breakdown using the shared utility
     summarize_parameters(model)
 
-    # ========================================
+    # ======================================== 
     #   Format Settings for WandB Run Name
     # ========================================
 
@@ -177,7 +233,7 @@ def main(config_path: str):
         config=full_cfg # Provides the model config, pretraining, and fine-tuning.
     )
 
-    # ===============================
+    # =============================== 
     #       Training Arguments
     # ===============================
 
@@ -204,7 +260,7 @@ def main(config_path: str):
         weight_decay=ptrain_cfg.get("weight_decay", 0.01),  
 
         # Learning rate warmup (10% of total steps)
-        warmup_steps=int(0.1 * ptrain_cfg["num_train_steps"]),  
+        warmup_steps=int(0.1 * ptrain_cfg["num_train_steps"]),
         lr_scheduler_type="linear",  # Linear warmup then decay
 
         # Evaluate every 2,000 steps
@@ -307,7 +363,7 @@ def main(config_path: str):
     # Instantiate your stateful metric computer
     mlm_accuracy_metric = MLMAccuracyMetric()
 
-    # ===============================
+    # =============================== 
     #           Trainer
     # ===============================
     trainer = Trainer(
@@ -327,7 +383,7 @@ def main(config_path: str):
 
     """## Loop"""
 
-    # =====================
+    # ===================== 
     #     Run Training
     # =====================
 
