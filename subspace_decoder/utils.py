@@ -75,7 +75,7 @@ def make_shorthand(model_cfg):
 
     dense_str = str(model_cfg.num_dense_layers) + "mha + "
 
-    if model_cfg.output_subspace:
+    if model_cfg.o_shared_dim is not None:
         o_str = "." + str(model_cfg.o_shared_dim)
     else:
         o_str = ""

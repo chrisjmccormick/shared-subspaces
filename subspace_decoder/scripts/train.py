@@ -115,13 +115,6 @@ def main(config_path: str):
     else:
         print("torch.compile disabled. Enable with 'torch_compile': true in config.")
 
-    # Use the DeepSeek tokenizer
-    #tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-V3")
-    
-    # Set pad token if not already set
-    #if tokenizer.pad_token is None:
-    #    tokenizer.pad_token = tokenizer.eos_token
-
     
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     # gpt2 has no pad by default; use EOS for padding in causal LM
@@ -129,7 +122,7 @@ def main(config_path: str):
     tokenizer.padding_side = "right"
         
     # Verify vocab size matches
-    assert model_cfg["vocab_size"] == tokenizer.vocab_size
+    assert model_cfg.vocab_size == tokenizer.vocab_size
 
     # Set random seed for reproducibility
     set_seed(ptrain_cfg["seed"])

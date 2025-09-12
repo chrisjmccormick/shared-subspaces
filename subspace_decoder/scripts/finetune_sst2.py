@@ -193,7 +193,7 @@ def main():
     tok_name = ft["tokenizer_name_or_path"]  # recommended
     if tok_name is None:
         # Fallback heuristic by vocab size
-        tok_name = "gpt2" if model_cfg["vocab_size"] <= 60000 else "deepseek-ai/DeepSeek-V3"
+        tok_name = "gpt2" if model_cfg.vocab_size <= 60000 else "deepseek-ai/DeepSeek-V3"
     tokenizer = AutoTokenizer.from_pretrained(tok_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token

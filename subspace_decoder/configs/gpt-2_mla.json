@@ -35,7 +35,7 @@
 
 	"attention_bias":       false,	
 	
-    "attention_backend":    "flash_attention_2",
+    "attention_backend":    "sdpa",
 
     "ffn_decompose":     false,
     "ffn_rank":          null,
@@ -55,8 +55,8 @@
     "output_dir":           "checkpoints/gpt2_mla_c4_baseline",
 	"seed":                 42,
 		
-    "train_batch_size":     128,
-    "gradient_accumulation_steps": 8,
+    "train_batch_size":     32,
+    "gradient_accumulation_steps": 32,
     "learning_rate":        5e-04,
     "num_train_steps":      12500,
     "eval_steps":           1000,
