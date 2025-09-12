@@ -78,7 +78,7 @@ def main(config_path: str):
 
     # ====================== 
     #    Prepare Dataset
-    # ======================
+    # =====================
 
     dataset = load_dataset(
         ptrain_cfg["dataset_name"],
@@ -106,16 +106,6 @@ def main(config_path: str):
             batched=True,
             num_proc=8, # Use more CPUs to speed it up--this helps a lot.
             remove_columns=["text"] # Comment this
-        )
-
-        # This DataCollator:
-        # - Pads examples in a batch to the same length
-        # - Applies BERT's Masked Language Modeling, replacing random tokens with
-        #   [MASK]. Enabled by setting `mlm_probability`.
-        # - Returns input_ids, labels, and attention_mask for MLM training
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=tokenizer,
-            mlm_probability=ptrain_cfg["mlm_probability"] # Default is 15%
         )
     else:
         print("\nUsing efficient sequence packing...\n")
@@ -168,12 +158,15 @@ def main(config_path: str):
             num_proc=8,
         )
 
-        # This DataCollator applies MLM on the already packed sequences.
-        # It does not need to pad since all sequences are of equal length.
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=tokenizer,
-            mlm_probability=ptrain_cfg["mlm_probability"] # Default is 15%
-        )
+    # This DataCollator:
+    # - Pads examples in a batch to the same length (if not using packing)
+    # - Applies BERT's Masked Language Modeling, replacing random tokens with
+    #   [MASK]. Enabled by setting `mlm_probability`.
+    # - Returns input_ids, labels, and attention_mask for MLM training
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm_probability=ptrain_cfg["mlm_probability"] # Default is 15%
+    )
 
     # ======================== 
     #    Initialize Model
