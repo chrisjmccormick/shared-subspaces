@@ -98,7 +98,7 @@ def main():
     set_seed(sft_cfg["seed"])
 
     # Define run name for logging
-    run_name = full_cfg["pre_train"]["run_name"] + f' - pt_id.{full_cfg["pre_train"]["run_id"]} - {sft_cfg["task"]}'
+    run_name = "packing" + " - " + full_cfg["pre_train"]["run_name"] + f' - pt_id.{full_cfg["pre_train"]["run_id"]} - {sft_cfg["task"]}'
     full_cfg["fine_tune"]["run_name"] = run_name
     full_cfg["fine_tune"]["model_path"] = checkpoint_path
     full_cfg["fine_tune"]["tuned_from_id"] = full_cfg["pre_train"]["run_id"]

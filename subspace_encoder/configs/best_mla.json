@@ -67,7 +67,10 @@
     "torch_compile_backend": "inductor",
     "torch_compile_mode":   "default",
 
-    "enable_packing":       true
+    "enable_packing":       true,
+
+    "run_name":              "mla-baseline",
+    "run_id":                "koko"
   },
   
   "fine_tune": {

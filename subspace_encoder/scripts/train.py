@@ -218,7 +218,7 @@ def main(config_path: str):
 
     # Attention configuration
 
-    ptrain_cfg["run_name"] = full_cfg["stats"]["total_elements"] + " - " + full_cfg["shorthand"]
+    ptrain_cfg["run_name"] = "packing" + " - " + full_cfg["stats"]["total_elements"] + " - " + full_cfg["shorthand"]
 
     #model.config.run_name = run_name
 
