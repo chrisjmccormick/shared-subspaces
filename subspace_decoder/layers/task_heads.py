@@ -13,8 +13,28 @@ from models.shared_space_decoder import (
     DeepseekV3RMSNorm
 )
 
+def create_norm_layer(hidden_size: int, config: SharedSpaceDecoderConfig) -> nn.Module:
+    """
+    Create a normalization layer based on the config norm_type.
+    
+    Args:
+        hidden_size: The dimension to normalize over
+        config: Configuration containing norm_type and epsilon values
+    
+    Returns:
+        Either a LayerNorm or RMSNorm layer
+    """
+    if config.norm_type == "layernorm":
+        return nn.LayerNorm(hidden_size, eps=config.layer_norm_eps)
+    elif config.norm_type == "rmsnorm":
+        from models.shared_space_decoder import DeepseekV3RMSNorm
+        return DeepseekV3RMSNorm(hidden_size, eps=config.rms_norm_eps)
+    else:
+        # This should be caught by config validation, but being defensive
+        raise ValueError(f"Unknown norm_type: {config.norm_type}")
 
-class SubspaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
+
+class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
     """
     Subspace Decoder model with a causal language modeling head.
     
@@ -36,9 +56,7 @@ class SubspaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
         self.model = SharedSpaceDecoderModel(config)
         
         # Final layer norm before the language modeling head
-        self.norm = DeepseekV3RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.norm = create_norm_layer(config.hidden_size, config)
         
         # Language modeling head
         # Projects from hidden_size to vocab_size to get logits for each token

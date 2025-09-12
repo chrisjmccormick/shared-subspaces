@@ -18,7 +18,28 @@ Norms:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.shared_space_config import SharedSpaceEncoderConfig
+from models.shared_space_config import SharedSpaceDecoderConfig
+
+
+def create_norm_layer(hidden_size: int, config: SharedSpaceDecoderConfig) -> nn.Module:
+    """
+    Create a normalization layer based on the config norm_type.
+    
+    Args:
+        hidden_size: The dimension to normalize over
+        config: Configuration containing norm_type and epsilon values
+    
+    Returns:
+        Either a LayerNorm or RMSNorm layer
+    """
+    if config.norm_type == "layernorm":
+        return nn.LayerNorm(hidden_size, eps=config.layer_norm_eps)
+    elif config.norm_type == "rmsnorm":
+        return DeepseekV3RMSNorm(hidden_size, eps=config.rms_norm_eps)
+    else:
+        # This should be caught by config validation, but being defensive
+        raise ValueError(f"Unknown norm_type: {config.norm_type}")
+
 
 # TODO - Find a shared place to put this.
 class DeepseekV3RMSNorm(nn.Module):
@@ -39,7 +60,7 @@ class DeepseekV3RMSNorm(nn.Module):
 
 class SubspaceFeedForward(nn.Module):
     """
-    Feed-forward block for SharedSpaceEncoder.
+    Feed-forward block for SharedSpaceDecoder.
 
     Implements SwiGLU:
         FFN(x) = W_out( Swish(W_in(x)) ⊙ W_gate(x) ) + residual
@@ -95,12 +116,12 @@ class SubspaceFeedForward(nn.Module):
 
             # === Input Projections ===
             self.W_in_shared = nn.Linear(hidden_dim, rank, bias=False)
-            self.W_in_shared_norm = DeepseekV3RMSNorm(rank, eps=config.rms_norm_eps)
+            self.W_in_shared_norm = create_norm_layer(rank, config)
             self.W_in = nn.Linear(rank, intermediate_dim, bias=True)
 
             # === Gate Projections ===
             self.W_gate_shared = nn.Linear(hidden_dim, rank, bias=False)
-            self.W_gate_shared_norm = DeepseekV3RMSNorm(rank, eps=config.rms_norm_eps)
+            self.W_gate_shared_norm = create_norm_layer(rank, config)
             self.W_gate = nn.Linear(rank, intermediate_dim, bias=True)
 
             # === Output Projection ===
