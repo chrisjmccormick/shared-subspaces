@@ -96,21 +96,21 @@ def main(config_path: str):
         full_cfg["stats"] = {}
     
     # Validate mixed precision settings
-    if ptrain_cfg.get("bf16", False) and ptrain_cfg.get("fp16", False):
+    if ptrain_cfg["bf16"] and ptrain_cfg["fp16"]:
         raise ValueError("Cannot enable both bf16 and fp16 simultaneously. Please choose one.")
     
     # Check BFloat16 compatibility if enabled
-    if ptrain_cfg.get("bf16", False):
+    if ptrain_cfg["bf16"]:
         if not check_bf16_support():
             print("BFloat16 requested but not supported. Falling back to FP16.")
             ptrain_cfg["bf16"] = False
             ptrain_cfg["fp16"] = True
     
     # Display torch.compile status
-    if ptrain_cfg.get("torch_compile", False):
+    if ptrain_cfg["torch_compile"]:
         print(f"✓ torch.compile enabled:")
-        print(f"  Backend: {ptrain_cfg.get('torch_compile_backend', 'inductor')}")
-        print(f"  Mode: {ptrain_cfg.get('torch_compile_mode', 'default')}")
+        print(f"  Backend: {ptrain_cfg['torch_compile_backend']}")
+        print(f"  Mode: {ptrain_cfg['torch_compile_mode']}")
         print("  Note: First training step will be slower due to compilation.")
     else:
         print("torch.compile disabled. Enable with 'torch_compile': true in config.")
@@ -147,10 +147,109 @@ def main(config_path: str):
     #    Prepare Dataset
     # ======================
     
-    dataset = load_dataset(
-        ptrain_cfg["dataset_name"],
-        ptrain_cfg["dataset_config"]
-    )
+    # Handle C4 dataset with efficient streaming and subset selection
+    dataset_name = ptrain_cfg["dataset_name"]
+    dataset_config = ptrain_cfg["dataset_config"]
+    
+    if dataset_name == "c4":
+        # Use streaming for C4 to avoid downloading the entire dataset
+        # and take_first to get exactly the percentage we want
+        dataset_subset_pct = ptrain_cfg["dataset_subset_pct"]
+        
+        if dataset_subset_pct < 1.0:
+            print(f"Loading {dataset_subset_pct*100}% of C4 dataset with streaming...")
+            
+            # Check for cached subset to avoid re-processing
+            cache_dir = f"./data_cache/c4_{dataset_config}_{dataset_subset_pct}"
+            cached_dataset_path = f"{cache_dir}/dataset"
+            
+            if os.path.exists(cached_dataset_path):
+                print(f"Found cached C4 subset at {cached_dataset_path}, loading...")
+                from datasets import load_from_disk
+                dataset = load_from_disk(cached_dataset_path)
+                print(f"Loaded cached dataset:")
+                print(f"  Train: {len(dataset['train']):,} examples")
+                print(f"  Validation: {len(dataset['validation']):,} examples")
+            else:
+                print("No cached subset found, streaming and processing...")
+                
+                # Create cache directory
+                os.makedirs(cache_dir, exist_ok=True)
+                
+                # Load with streaming to avoid memory issues
+                dataset = load_dataset(
+                    dataset_name,
+                    dataset_config,
+                    streaming=True,
+                    trust_remote_code=True
+                )
+            
+                # Calculate number of examples to take (approximate)
+                # C4 has ~364M examples in train split, so 1% ≈ 3.64M examples
+                if dataset_subset_pct == 0.01:  # 1%
+                    take_examples = 3_640_000
+                else:
+                    # Rough estimate based on known C4 size
+                    take_examples = int(364_000_000 * dataset_subset_pct)
+                
+                print(f"Taking approximately {take_examples:,} examples ({dataset_subset_pct*100}%)")
+                
+                # More efficient approach: use itertools.islice for streaming
+                import itertools
+                from datasets import DatasetDict, Dataset
+                
+                print("Streaming and materializing C4 subset...")
+                
+                # Stream and take only what we need
+                train_dataset = dataset["train"]
+                
+                # For validation, take a smaller subset (0.1% of the train subset)
+                val_examples = max(1000, take_examples // 1000)  # At least 1000 examples
+                
+                # Convert streaming to list efficiently with progress tracking
+                print("Processing training examples...")
+                train_data = []
+                for i, example in enumerate(itertools.islice(train_dataset, take_examples)):
+                    train_data.append(example)
+                    if i % 100000 == 0 and i > 0:
+                        print(f"  Processed {i:,} / {take_examples:,} training examples ({i/take_examples*100:.1f}%)")
+                
+                print("Processing validation examples...")
+                val_data = []
+                # Use a separate stream for validation to get different examples
+                if "validation" in dataset:
+                    val_dataset = dataset["validation"]
+                else:
+                    # Skip the training examples we already took and use the next ones for validation
+                    val_dataset = itertools.islice(dataset["train"], take_examples, take_examples + val_examples)
+                
+                for i, example in enumerate(itertools.islice(val_dataset, val_examples)):
+                    val_data.append(example)
+                    if i % 10000 == 0 and i > 0:
+                        print(f"  Processed {i:,} / {val_examples:,} validation examples")
+                
+                # Create the final dataset
+                dataset = DatasetDict({
+                    "train": Dataset.from_list(train_data),
+                    "validation": Dataset.from_list(val_data)
+                })
+                
+                print(f"Final dataset sizes:")
+                print(f"  Train: {len(dataset['train']):,} examples")
+                print(f"  Validation: {len(dataset['validation']):,} examples")
+                
+                # Cache the processed dataset for future use
+                print(f"Caching processed dataset to {cached_dataset_path}...")
+                dataset.save_to_disk(cached_dataset_path)
+                print("Dataset cached successfully!")
+        else:
+            # Load full C4 dataset (not recommended due to size)
+            print("Loading full C4 dataset...")
+            dataset = load_dataset(dataset_name, dataset_config, trust_remote_code=True)
+    else:
+        # Original logic for wikitext and other datasets
+        dataset = load_dataset(dataset_name, dataset_config)
+
     print(dataset)
     
     block_size = ptrain_cfg["max_seq_length"]
@@ -231,7 +330,7 @@ def main(config_path: str):
 
     # Calculate and display effective batch size
     device_batch_size = ptrain_cfg["train_batch_size"]
-    gradient_accumulation_steps = ptrain_cfg.get("gradient_accumulation_steps", 1)
+    gradient_accumulation_steps = ptrain_cfg["gradient_accumulation_steps"]
     effective_batch_size = device_batch_size * gradient_accumulation_steps
     
     print(f"\n======== Batch Size Configuration ========")
@@ -277,7 +376,7 @@ def main(config_path: str):
     """## wandb and TrainingArguments"""
 
     wandb.init(
-        project="decoder-pretrain-wiki103",
+        project=ptrain_cfg["wandb_project"],
         name=ptrain_cfg["run_name"],
         config=full_cfg
     )
@@ -291,15 +390,15 @@ def main(config_path: str):
 
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
-        gradient_accumulation_steps=ptrain_cfg.get("gradient_accumulation_steps", 1),
+        gradient_accumulation_steps=ptrain_cfg["gradient_accumulation_steps"],
 
-        bf16=ptrain_cfg.get("bf16", False),
-        fp16=ptrain_cfg.get("fp16", False),
+        bf16=ptrain_cfg["bf16"],
+        fp16=ptrain_cfg["fp16"],
         
         # torch.compile configuration for performance optimization
-        torch_compile=ptrain_cfg.get("torch_compile", False),
-        torch_compile_backend=ptrain_cfg.get("torch_compile_backend", "inductor"),
-        torch_compile_mode=ptrain_cfg.get("torch_compile_mode", "default"),
+        torch_compile=ptrain_cfg["torch_compile"],
+        torch_compile_backend=ptrain_cfg["torch_compile_backend"],
+        torch_compile_mode=ptrain_cfg["torch_compile_mode"],
 
         learning_rate=ptrain_cfg["learning_rate"],
         max_steps=ptrain_cfg["num_train_steps"], 
@@ -308,12 +407,12 @@ def main(config_path: str):
         #max_grad_norm = 1.0,
         
         # The dataloader is a bottleneck without these.
-        dataloader_num_workers=ptrain_cfg.get("num_workers", 8),
-        dataloader_pin_memory=ptrain_cfg.get("pin_memory", True),
+        dataloader_num_workers=ptrain_cfg["num_workers"],
+        dataloader_pin_memory=ptrain_cfg["pin_memory"],
         # The prefetch factor didn't appear to help.
-        #dataloader_prefetch_factor = ptrain_cfg.get("prefetch_factor", 2),
+        #dataloader_prefetch_factor = ptrain_cfg["prefetch_factor"],
 
-        weight_decay=ptrain_cfg.get("weight_decay", 0.01),  
+        weight_decay=ptrain_cfg["weight_decay"],  
 
         # Learning rate warmup (10% of total steps)
         warmup_steps=int(0.1 * ptrain_cfg["num_train_steps"]),  
@@ -324,7 +423,7 @@ def main(config_path: str):
         # `evaluation_strategy` to `eval_strategy`.
         batch_eval_metrics = True, # To avoid OOM
         eval_strategy="steps",
-        eval_steps=ptrain_cfg.get("eval_steps", 2000),
+        eval_steps=ptrain_cfg["eval_steps"],
         eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
 
         logging_steps=50,

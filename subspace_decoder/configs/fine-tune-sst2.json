@@ -1,5 +1,6 @@
 {
     "fine_tune": {
+    "wandb_project": "decoder-finetune-sst2",
     "task": "sst2",
     "tokenizer_name_or_path": "gpt2",
     "method": "lm_label_words",
@@ -17,6 +18,7 @@
     "eval_steps": 150,
     "logging_steps": 20,
     "save_strategy": "no",
+    "save_steps": 500,
     "save_total_limit": 0,
     "report_to_wandb": true,
     "bf16": true,

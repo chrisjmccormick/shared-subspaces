@@ -75,9 +75,9 @@ def _try_bf16_tensor():
 
 def build_label_vocab(tokenizer, ft_cfg):
     # Default label words if not provided
-    label_words = ft_cfg.get("label_words") or {"0": " negative", "1": " positive"}
-    lw0 = label_words.get("0", " negative")
-    lw1 = label_words.get("1", " positive")
+    label_words = ft_cfg["label_words"]
+    lw0 = label_words["0"]
+    lw1 = label_words["1"]
 
     toks0 = tokenizer.tokenize(lw0)
     toks1 = tokenizer.tokenize(lw1)
@@ -101,7 +101,7 @@ def make_prompt_template(ft_cfg):
         " I absolutely loved this film. - positive\n"
         " {sentence} -{label_word}"
     )
-    prompt = ft_cfg.get("prompt_template", default_prompt)
+    prompt = ft_cfg["prompt_template"] if "prompt_template" in ft_cfg else default_prompt
         
     return prompt
 
@@ -179,21 +179,21 @@ def main():
     ptrain_cfg = full_cfg["pre_train"]
     
     # Extract fine-tune config (with fallbacks from model config if needed)
-    ft = sft_cfg.get("fine_tune", {})
+    ft = sft_cfg["fine_tune"]
     
     # Auto-complete fields from pre-trained model config
     ft["run_name"] = f"ft-sst2-{ptrain_cfg["run_name"]}"
     ft["output_dir"] = f"{ptrain_cfg["output_dir"]}/ft_sst2"
     
 
-    seed = ft.get("seed", 42)
+    seed = ft["seed"]
     set_seed(seed)
 
     # Tokenizer selection
-    tok_name = ft.get("tokenizer_name_or_path")  # recommended
+    tok_name = ft["tokenizer_name_or_path"]  # recommended
     if tok_name is None:
         # Fallback heuristic by vocab size
-        tok_name = "gpt2" if model_cfg.get("vocab_size", 0) <= 60000 else "deepseek-ai/DeepSeek-V3"
+        tok_name = "gpt2" if model_cfg["vocab_size"] <= 60000 else "deepseek-ai/DeepSeek-V3"
     tokenizer = AutoTokenizer.from_pretrained(tok_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -218,7 +218,7 @@ def main():
     # Safety guard: filter any unlabeled rows (label == -1)
     ds = ds.filter(lambda ex: ex["label"] != -1)
 
-    max_seq_length = ft.get("max_seq_length", 128)
+    max_seq_length = ft["max_seq_length"]
     
     ds = map_with_prompt(ds, tokenizer, label_val_to_word, label_val_to_token_id, prompt_template, max_seq_length)
     
@@ -300,8 +300,8 @@ def main():
 
     
     # Precision / compile
-    bf16 = ft.get("bf16", True) and _bf16_ok()
-    fp16 = ft.get("fp16", False) if not bf16 else False
+    bf16 = ft["bf16"] and _bf16_ok()
+    fp16 = ft["fp16"] if not bf16 else False
 
     # Custom collator to handle variable-length sequences properly
     import torch.nn.functional as F
@@ -348,14 +348,14 @@ def main():
     )
 
     # Output dir (already handled in auto-completion above)
-    out_dir = ft.get("output_dir")
+    out_dir = ft["output_dir"]
 
     # Steps vs epochs
-    max_steps = ft.get("max_steps")  # preferred for speed/consistency
+    max_steps = ft["max_steps"]  # preferred for speed/consistency
 
     # Warmup
-    warmup_ratio = ft.get("warmup_ratio", 0.1)
-    warmup_steps = ft.get("warmup_steps")  # override if provided
+    warmup_ratio = ft["warmup_ratio"] if "warmup_ratio" in ft else 0.1
+    warmup_steps = ft["warmup_steps"] if "warmup_steps" in ft else None  # override if provided
 
     # Metrics: accuracy on the label token using LM head
     pos_id = label_val_to_token_id[1]
@@ -418,8 +418,8 @@ def main():
     # ========================================
 
     wandb.init(
-        project="decoder-finetune-sst2",
-        name=ft.get("run_name", f"ft-sst2-{run_name}"),
+        project=ft["wandb_project"],
+        name=f"ft-sst2-{ft['run_name']}",
         config=full_cfg
     )
     
@@ -428,24 +428,24 @@ def main():
         output_dir=out_dir,
         per_device_train_batch_size=ft["train_batch_size"],
         per_device_eval_batch_size=ft["eval_batch_size"],
-        gradient_accumulation_steps=ft.get("gradient_accumulation_steps", 1),
-        learning_rate=ft.get("learning_rate", 1e-4),
-        weight_decay=ft.get("weight_decay", 0.01),
+        gradient_accumulation_steps=ft["gradient_accumulation_steps"],
+        learning_rate=ft["learning_rate"],
+        weight_decay=ft["weight_decay"],
         bf16=bf16,
         fp16=fp16,
         # TODO - Not planning to use this for now. Also, torch_compile auto-sets to true
         #        if you specify (the backend?).
-        #torch_compile=ft.get("torch_compile", True),
-        #torch_compile_backend=ft.get("torch_compile_backend", "inductor"),
-        #torch_compile_mode=ft.get("torch_compile_mode", "default"),
+        #torch_compile=ft["torch_compile"],
+        #torch_compile_backend=ft["torch_compile_backend"],
+        #torch_compile_mode=ft["torch_compile_mode"],
         eval_strategy="steps",
-        eval_steps=ft.get("eval_steps", 100),
-        save_strategy=ft.get("save_strategy", "steps"),
-        save_steps=ft.get("save_steps", 500) if ft.get("save_strategy", "steps") != "no" else None,
-        save_total_limit=ft.get("save_total_limit", 2),
-        logging_steps=ft.get("logging_steps", 20),
-        report_to=["wandb"] if ft.get("report_to_wandb", True) else [],
-        run_name=ft.get("run_name", f"ft-sst2-{run_name}"),
+        eval_steps=ft["eval_steps"],
+        save_strategy=ft["save_strategy"],
+        save_steps=ft["save_steps"] if ft["save_strategy"] != "no" else None,
+        save_total_limit=ft["save_total_limit"],
+        logging_steps=ft["logging_steps"],
+        report_to=["wandb"] if ft["report_to_wandb"] else [],
+        run_name=ft["run_name"],
         remove_unused_columns=False,
         metric_for_best_model="accuracy",
         greater_is_better=True,
