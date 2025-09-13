@@ -117,27 +117,16 @@ class SharedSpaceDecoderLayer(nn.Module):
         super().__init__()
 
         # Norm applied prior to attention.
-        self.attn_input_norm = DeepseekV3RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
-
+        self.attn_input_norm = create_norm_layer(config.hidden_size, config)
+        
         # Attention block
         self.self_attn = MultiheadLatentAttention(config, layer_idx)
 
         # Norm applied prior to FFN
-        self.ffn_input_norm = DeepseekV3RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.ffn_input_norm = create_norm_layer(config.hidden_size, config)
 
         # Feed-forward network used after attention
         self.ffn = SubspaceFeedForward(config, layer_idx)
-
-        # Currently going with RMSNorm
-        #self.attn_norm = nn.LayerNorm(
-        #    config.hidden_size,
-        #    eps=getattr(config, "layer_norm_eps", getattr(config, "eps", 1e-5)),
-        #)
-
 
     def forward(
         self,
