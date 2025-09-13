@@ -42,6 +42,7 @@ class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
     - A language modeling head that projects hidden states to vocabulary logits
     - Support for computing cross-entropy loss for language modeling
     - Proper HuggingFace compatibility for causal language modeling tasks
+    - Decoder-specific initialization strategies
     
     The model can be used for:
     - Text generation
@@ -71,8 +72,34 @@ class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
         # The lm_head uses the transpose of the input embedding matrix
         self.tie_weights()
         
-        # Initialize weights
+        # Initialize weights with decoder-specific strategy
         self.post_init()
+
+    def _init_weights(self, module: nn.Module) -> None:
+        """
+        Decoder-specific weight initialization with special handling for language modeling head.
+        
+        Key differences from encoder initialization:
+        - Language modeling head gets specialized initialization for stability
+        - Configurable normalization layers (LayerNorm or RMSNorm) are properly handled  
+        - Weight tying considerations for embedding/lm_head relationship
+        """
+        
+        # Use the base class initialization for most modules
+        super()._init_weights(module)
+        
+        # Special handling for language modeling head
+        if module is self.lm_head:
+            # Use smaller initialization for the language modeling head
+            # This helps with training stability in autoregressive generation
+            # Common practice is to use std=initializer_range or smaller
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            
+            # If weight tying is not used, we might want even smaller init
+            if self.model.vocab_proj is not None:
+                # For vocab subspace models where weights aren't tied,
+                # use a smaller scale to prevent initial logits from being too large
+                module.weight.data.normal_(mean=0.0, std=self.config.initializer_range * 0.5)
 
     def get_input_embeddings(self):
         """Return the input embedding layer for compatibility with HuggingFace."""

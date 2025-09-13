@@ -62,21 +62,31 @@ class SharedSpaceDecoderPreTrainedModel(PreTrainedModel):
         it so that creating a model from scratch yields the same initialization
         as ``from_pretrained`` when no checkpoint is supplied.
 
-        The modules themselves come with PyTorch defaults; this method simply
-        enforces the initializer scheme used throughout the library.  It is not
-        required, but leaving it out would lead to slightly different weight
-        statistics.
+        This decoder-specific initialization strategy includes:
+        - Proper handling of configurable normalization layers (LayerNorm or RMSNorm)
+        - Special initialization for language modeling heads
+        - Considerations for causal attention and autoregressive modeling
+        - Support for both dense and decomposed vocabulary embeddings
         """
 
         if isinstance(module, nn.Linear):
+            # Standard linear layer initialization
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
+                
         elif isinstance(module, nn.Embedding):
+            # Initialize embeddings with normal distribution
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
+                
+        elif isinstance(module, DeepseekV3RMSNorm):
+            # RMSNorm initialization: weight to 1.0, no bias term
+            module.weight.data.fill_(1.0)
+            
         elif isinstance(module, nn.LayerNorm):
+            # LayerNorm initialization: bias to 0, weight to 1.0
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
