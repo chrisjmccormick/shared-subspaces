@@ -140,21 +140,35 @@ def main(config_path: str):
     #    Prepare Dataset
     # ======================
     
-    # Handle C4 dataset with efficient streaming and subset selection
-    dataset_name = ptrain_cfg["dataset_name"]
-    dataset_config = ptrain_cfg["dataset_config"]
-    
-    if dataset_name == "c4":
-        # Use streaming for C4 to avoid downloading the entire dataset
-        # and take_first to get exactly the percentage we want
-        dataset_subset_pct = ptrain_cfg["dataset_subset_pct"]
+    # Check if we should load a pre-processed dataset
+    if "preprocessed_dataset_path" in ptrain_cfg and ptrain_cfg["preprocessed_dataset_path"]:
+        print(f"Loading pre-processed dataset from: {ptrain_cfg['preprocessed_dataset_path']}")
+        from datasets import load_from_disk
         
-        if dataset_subset_pct < 1.0:
-            print(f"Loading {dataset_subset_pct*100}% of C4 dataset with streaming...")
-            
-            # Check for cached subset to avoid re-processing
-            cache_dir = f"./data_cache/c4_{dataset_config}_{dataset_subset_pct}"
-            cached_dataset_path = f"{cache_dir}/dataset"
+        dataset = load_from_disk(ptrain_cfg["preprocessed_dataset_path"])
+        print(f"Loaded pre-processed dataset:")
+        print(f"  Train: {len(dataset['train']):,} examples")
+        print(f"  Validation: {len(dataset['validation']):,} examples")
+        
+        # Skip tokenization and chunking since it's already done
+        tokenized = dataset
+        
+    else:
+        # Handle C4 dataset with efficient streaming and subset selection
+        dataset_name = ptrain_cfg["dataset_name"]
+        dataset_config = ptrain_cfg["dataset_config"]
+        
+        if dataset_name == "c4":
+            # Use streaming for C4 to avoid downloading the entire dataset
+            # and take_first to get exactly the percentage we want
+            dataset_subset_pct = ptrain_cfg["dataset_subset_pct"]
+        
+            if dataset_subset_pct < 1.0:
+                print(f"Loading {dataset_subset_pct*100}% of C4 dataset with streaming...")
+                
+                # Check for cached subset to avoid re-processing
+                cache_dir = f"./data_cache/c4_{dataset_config}_{dataset_subset_pct}"
+                cached_dataset_path = f"{cache_dir}/dataset"
             
             if os.path.exists(cached_dataset_path):
                 print(f"Found cached C4 subset at {cached_dataset_path}, loading...")
@@ -198,27 +212,59 @@ def main(config_path: str):
                 # For validation, take a smaller subset (0.1% of the train subset)
                 val_examples = max(1000, take_examples // 1000)  # At least 1000 examples
                 
-                # Convert streaming to list efficiently with progress tracking
-                print("Processing training examples...")
-                train_data = []
-                for i, example in enumerate(itertools.islice(train_dataset, take_examples)):
-                    train_data.append(example)
-                    if i % 100000 == 0 and i > 0:
-                        print(f"  Processed {i:,} / {take_examples:,} training examples ({i/take_examples*100:.1f}%)")
+                # Check if we have cached intermediate training data
+                intermediate_train_path = f"{cache_dir}/train_data_intermediate.json"
                 
-                print("Processing validation examples...")
-                val_data = []
-                # Use a separate stream for validation to get different examples
-                if "validation" in dataset:
-                    val_dataset = dataset["validation"]
+                if os.path.exists(intermediate_train_path):
+                    print(f"Found cached intermediate training data at {intermediate_train_path}, loading...")
+                    import json
+                    with open(intermediate_train_path, 'r', encoding='utf-8') as f:
+                        train_data = json.load(f)
+                    print(f"Loaded {len(train_data):,} training examples from cache")
                 else:
-                    # Skip the training examples we already took and use the next ones for validation
-                    val_dataset = itertools.islice(dataset["train"], take_examples, take_examples + val_examples)
+                    # Convert streaming to list efficiently with progress tracking
+                    print("Processing training examples...")
+                    train_data = []
+                    for i, example in enumerate(itertools.islice(train_dataset, take_examples)):
+                        train_data.append(example)
+                        if i % 100000 == 0 and i > 0:
+                            print(f"  Processed {i:,} / {take_examples:,} training examples ({i/take_examples*100:.1f}%)")
+                    
+                    # Save intermediate training data to disk
+                    print(f"Saving intermediate training data to {intermediate_train_path}...")
+                    import json
+                    with open(intermediate_train_path, 'w', encoding='utf-8') as f:
+                        json.dump(train_data, f)
+                    print("Intermediate training data saved successfully!")
+
+                # Check if we have cached intermediate validation data
+                intermediate_val_path = f"{cache_dir}/val_data_intermediate.json"
                 
-                for i, example in enumerate(itertools.islice(val_dataset, val_examples)):
-                    val_data.append(example)
-                    if i % 10000 == 0 and i > 0:
-                        print(f"  Processed {i:,} / {val_examples:,} validation examples")
+                if os.path.exists(intermediate_val_path):
+                    print(f"Found cached intermediate validation data at {intermediate_val_path}, loading...")
+                    with open(intermediate_val_path, 'r', encoding='utf-8') as f:
+                        val_data = json.load(f)
+                    print(f"Loaded {len(val_data):,} validation examples from cache")
+                else:
+                    print("Processing validation examples...")
+                    val_data = []
+                    # Use a separate stream for validation to get different examples
+                    if "validation" in dataset:
+                        val_dataset = dataset["validation"]
+                    else:
+                        # Skip the training examples we already took and use the next ones for validation
+                        val_dataset = itertools.islice(dataset["train"], take_examples, take_examples + val_examples)
+                    
+                    for i, example in enumerate(itertools.islice(val_dataset, val_examples)):
+                        val_data.append(example)
+                        if i % 10000 == 0 and i > 0:
+                            print(f"  Processed {i:,} / {val_examples:,} validation examples")
+                    
+                    # Save intermediate validation data to disk
+                    print(f"Saving intermediate validation data to {intermediate_val_path}...")
+                    with open(intermediate_val_path, 'w', encoding='utf-8') as f:
+                        json.dump(val_data, f)
+                    print("Intermediate validation data saved successfully!")
                 
                 # Create the final dataset
                 dataset = DatasetDict({
@@ -234,65 +280,65 @@ def main(config_path: str):
                 print(f"Caching processed dataset to {cached_dataset_path}...")
                 dataset.save_to_disk(cached_dataset_path)
                 print("Dataset cached successfully!")
+            else:
+                # Load full C4 dataset (not recommended due to size)
+                print("Loading full C4 dataset...")
+                dataset = load_dataset(dataset_name, dataset_config)
         else:
-            # Load full C4 dataset (not recommended due to size)
-            print("Loading full C4 dataset...")
+            # Original logic for wikitext and other datasets
             dataset = load_dataset(dataset_name, dataset_config)
-    else:
-        # Original logic for wikitext and other datasets
-        dataset = load_dataset(dataset_name, dataset_config)
 
-    print(dataset)
-    
-    block_size = ptrain_cfg["max_seq_length"]
-    eos_id = tokenizer.eos_token_id
-    
-    # 1) Tokenize without truncation/padding
-    def tokenize_function(examples):
-        # add_special_tokens=False keeps things raw; we’ll insert EOS between docs
-        return tokenizer(
-            examples["text"],
-            add_special_tokens=False,
+        print(dataset)
+        
+        block_size = ptrain_cfg["max_seq_length"]
+        eos_id = tokenizer.eos_token_id
+        
+        # 1) Tokenize without truncation/padding
+        def tokenize_function(examples):
+            # add_special_tokens=False keeps things raw; we'll insert EOS between docs
+            return tokenizer(
+                examples["text"],
+                add_special_tokens=False,
+            )
+        
+        # 2) Group into contiguous blocks (concat + chunk)
+        def group_texts(examples):
+            # Flatten and insert EOS between documents to avoid cross-article bleed
+            input_ids = []
+            for ids in examples["input_ids"]:
+                if len(ids) > 0:
+                    input_ids.extend(ids)
+                # add an EOS fencepost between docs
+                input_ids.append(eos_id)
+        
+            # Drop the trailing partial block so every example is full length
+            total_length = (len(input_ids) // block_size) * block_size
+            input_ids = input_ids[:total_length]
+        
+            # Split into equal blocks
+            result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
+            # Labels are next-token targets; Trainer/model will do the shift
+            return {
+                "input_ids": result_input_ids,
+                "labels": [ids.copy() for ids in result_input_ids],
+                # Optional attention masks (all ones because no padding)
+                "attention_mask": [[1] * block_size for _ in result_input_ids],
+            }
+        
+        # Tokenize
+        tokenized = dataset.map(
+            tokenize_function,
+            batched=True,
+            num_proc=8,
+            remove_columns=dataset["train"].column_names,  # drop raw "text"
         )
-    
-    # 2) Group into contiguous blocks (concat + chunk)
-    def group_texts(examples):
-        # Flatten and insert EOS between documents to avoid cross-article bleed
-        input_ids = []
-        for ids in examples["input_ids"]:
-            if len(ids) > 0:
-                input_ids.extend(ids)
-            # add an EOS fencepost between docs
-            input_ids.append(eos_id)
-    
-        # Drop the trailing partial block so every example is full length
-        total_length = (len(input_ids) // block_size) * block_size
-        input_ids = input_ids[:total_length]
-    
-        # Split into equal blocks
-        result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
-        # Labels are next-token targets; Trainer/model will do the shift
-        return {
-            "input_ids": result_input_ids,
-            "labels": [ids.copy() for ids in result_input_ids],
-            # Optional attention masks (all ones because no padding)
-            "attention_mask": [[1] * block_size for _ in result_input_ids],
-        }
-    
-    # Tokenize
-    tokenized = dataset.map(
-        tokenize_function,
-        batched=True,
-        num_proc=8,
-        remove_columns=dataset["train"].column_names,  # drop raw "text"
-    )
-    
-    # Concatenate + chunk
-    tokenized = tokenized.map(
-        group_texts,
-        batched=True,
-        num_proc=8,
-    )
+        
+        # Concatenate + chunk
+        tokenized = tokenized.map(
+            group_texts,
+            batched=True,
+            num_proc=8,
+        )
     
     # Use a simple collator; we already created labels and have no pads
     from transformers import default_data_collator
@@ -315,7 +361,7 @@ def main(config_path: str):
     print(model)
 
     print("\n======== Model ========")
-    print(json.dumps(model_cfg, indent=2))
+    print(model_cfg)
 
     print("\n======== Pre-Train ========")
     print(json.dumps(ptrain_cfg, indent=2))
