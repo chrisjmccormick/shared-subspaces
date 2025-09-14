@@ -265,6 +265,7 @@ class MultiheadLatentAttention(nn.Module):
         # Softmax scaling factor.
         self.softmax_scale = self.qk_private_dim ** (-0.5)
 
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -279,7 +280,7 @@ class MultiheadLatentAttention(nn.Module):
         #    T: seq_len        — number of tokens per sample
         #    H: n_heads        — number of attention heads
         #    D: hidden_dim     — model embedding size
-        #   Dh: vo_private_dim - per-head value/output projection dimension
+        #   Dv: vo_private_dim - per-head value/output projection dimension
         #   Dr: rope_dims      - The first Dr dimensions receive rope.
         #   Cq: q_shared_dim   - query shared subspace size
         #  Ckv: kv_shared_dim  - key-value shared subspace size
@@ -288,7 +289,10 @@ class MultiheadLatentAttention(nn.Module):
         # Input token embeddings
         # hidden_states: [B, T, D]
         B, T = hidden_states.shape[:2]
-        H, Dh = self.num_heads, self.vo_private_dim
+        H = self.num_heads
+        Dq = self.qk_private_dim     # per-head dim for Q and K
+        Dv = self.vo_private_dim     # per-head dim for V/O
+
         Dc_q, Dc_kv = self.q_shared_dim, self.kv_shared_dim
 
         # ==============================
@@ -390,9 +394,9 @@ class MultiheadLatentAttention(nn.Module):
         #   Each  [B, T, H*Dh]
         # Output:
         #   Each  [B, H,  T,  Dh]
-        queries = queries.view(B, T, H, Dh).transpose(1, 2)
-        keys =       keys.view(B, T, H, Dh).transpose(1, 2)
-        values =   values.view(B, T, H, Dh).transpose(1, 2)
+        queries = queries.view(B, T, H, Dq).transpose(1, 2)
+        keys =       keys.view(B, T, H, Dq).transpose(1, 2)
+        values =   values.view(B, T, H, Dv).transpose(1, 2)
 
         # ==================
         #        RoPE
@@ -492,14 +496,15 @@ class MultiheadLatentAttention(nn.Module):
         k_rotated = (k_rope * cos) + (rotate_half(k_rope) * sin)
 
         # 4. Concatenate the rotated and pass-through parts back together
-        # TODO - Add shapes
+        # Input (each): [B, H, T, Dr] and [B, H, T, Dq-Dr]
+        # Output (each): [B, H, T, Dq]
         queries = torch.cat((q_rotated, q_pass), dim=-1)
         keys = torch.cat((k_rotated, k_pass), dim=-1)
 
         # ===================
         #       Attention
         # ===================
-        # The tensors (queries, keys, values) now have shape [B, H, T, Dh]
+        # The tensors (queries, keys, values) now have shape [B, H, T, Dq]
         # and are ready for the attention score calculation.
 
         # Only apply dropout during training.
@@ -515,14 +520,14 @@ class MultiheadLatentAttention(nn.Module):
             queries,
             keys,
             values,
-            attn_mask=attention_mask,
+            attn_mask=None, # attention_mask,
             dropout_p=dropout_p,
             scale=self.softmax_scale,
             is_causal=True, # This is a decoder - apply causal masking
         )
 
-        # Reshape output back to [B, T, H * Dh] from [B, H, T, Dh]
-        attn_output = attn_output.transpose(1, 2).contiguous().view(B, T, H * Dh)
+        # Reshape output back to [B, T, H * Dv] from [B, H, T, Dv]
+        attn_output = attn_output.transpose(1, 2).contiguous().view(B, T, H * Dv)
 
         # =========================
         #     Output Projection
