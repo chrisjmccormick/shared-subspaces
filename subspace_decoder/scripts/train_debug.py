@@ -182,9 +182,9 @@ class GradientMonitor:
             if norms:
                 stats[f'gradient_norm/{layer_name}'] = norms[-1]
                 
-        # Warning for high gradient norms
-        if total_norm > self.config.gradient_norm_threshold:
-            warnings.warn(f"High gradient norm detected: {total_norm:.4f} at step {step}")
+        # Warning for high gradient norms (only print once per 10 steps to avoid spam)
+        if total_norm > self.config.gradient_norm_threshold and step % 10 == 0:
+            print(f"⚠️  High gradient norm: {total_norm:.4f} (threshold: {self.config.gradient_norm_threshold})")
             
         return stats
 
@@ -273,7 +273,7 @@ class WeightMonitor:
                         stats[f'weight_updates/{name}/norm'] = update_norm
                         
                         if update_ratio > self.config.weight_update_ratio_threshold:
-                            warnings.warn(f"Large weight update in {name}: {update_ratio:.4f} at step {step}")
+                            print(f"⚠️  Large weight update in {name}: {update_ratio:.4f} (threshold: {self.config.weight_update_ratio_threshold})")
                             
                 # Store current weights for next comparison
                 self.previous_weights[name] = weight_data.clone().detach()
@@ -356,7 +356,7 @@ class DebugTrainer(Trainer):
                 self.activation_hooks[name] = hook
                 module.register_forward_hook(hook)
     
-    def training_step(self, model, inputs):
+    def training_step(self, model, inputs, num_items_in_batch=None):
         """Override training step to add debugging."""
         model.train()
         inputs = self._prepare_inputs(inputs)
@@ -396,7 +396,7 @@ class DebugTrainer(Trainer):
             debug_stats.update(grad_stats)
             
         # Log weight statistics (less frequently to avoid overhead)
-        if self.debug_config.log_weight_stats and self.debug_step % 50 == 0:
+        if self.debug_config.log_weight_stats and self.debug_step % 100 == 0:
             weight_stats = self.weight_monitor.log_weights(self.model, self.debug_step)
             debug_stats.update(weight_stats)
             
@@ -415,11 +415,14 @@ class DebugTrainer(Trainer):
                     for stat_name, value in latest.items():
                         debug_stats[f'activations/{name.replace(".", "_")}/{stat_name}'] = value
                         
-        # Print important stats to console
-        if debug_stats:
-            print(f"Step {self.debug_step}: Loss={loss:.4f}, GradNorm={debug_stats.get('gradient_norm/total', 0):.4f}")
+        # Print important stats to console (only if there are issues)
+        grad_norm = debug_stats.get('gradient_norm/total', 0)
+        if grad_norm > self.debug_config.gradient_norm_threshold or loss > 15.0:
+            print(f"🚨 Step {self.debug_step}: Loss={loss:.4f}, GradNorm={grad_norm:.4f}")
             if torch.cuda.is_available():
-                print(f"  Memory: {debug_stats.get('memory/allocated_gb', 0):.2f}GB")
+                print(f"   Memory: {debug_stats.get('memory/allocated_gb', 0):.2f}GB")
+        elif self.debug_step % 50 == 0:  # Less frequent normal updates
+            print(f"📊 Step {self.debug_step}: Loss={loss:.4f}, GradNorm={grad_norm:.4f}")
                 
         # Log to wandb
         if debug_stats:
@@ -570,13 +573,13 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
             debug_config.gradient_norm_threshold = debug_args.get('gradient_threshold', 10.0)
             debug_config.loss_explosion_threshold = debug_args.get('loss_threshold', 100.0)
         
-        print("🔍 Debug mode enabled with comprehensive monitoring")
-        print(f"  📊 Logging debug info every {debug_config.debug_log_steps} steps")
-        print(f"  ⚠️  Gradient norm warning threshold: {debug_config.gradient_norm_threshold}")
+        print("🔍 Debug mode enabled - monitoring for training issues")
+        print(f"  📊 Logging every {debug_config.debug_log_steps} steps")
+        print(f"  ⚠️  Gradient norm threshold: {debug_config.gradient_norm_threshold}")
         print(f"  💥 Loss explosion threshold: {debug_config.loss_explosion_threshold}")
-        print(f"  📈 Plots will be saved to: {debug_config.debug_output_dir}")
-        print(f"  🛑 Early stopping on NaN: {debug_config.early_stop_on_nan}")
-        print(f"  🛑 Early stopping on loss explosion: {debug_config.early_stop_on_loss_explosion}")
+        print(f"  📈 Debug plots: {debug_config.debug_output_dir}")
+        print("  🚨 Will highlight problematic steps with 🚨")
+        print("  📊 Normal progress shown every 50 steps")
 
     ptrain_cfg = full_cfg['pre_train']
 
@@ -598,14 +601,10 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
             ptrain_cfg["bf16"] = False
             ptrain_cfg["fp16"] = True
     
-    # Display torch.compile status
+        # Disable torch.compile for debugging (causes issues with hooks)
     if ptrain_cfg["torch_compile"]:
-        print(f"✓ torch.compile enabled:")
-        print(f"  Backend: {ptrain_cfg['torch_compile_backend']}")
-        print(f"  Mode: {ptrain_cfg['torch_compile_mode']}")
-        print("  Note: First training step will be slower due to compilation.")
-    else:
-        print("torch.compile disabled. Enable with 'torch_compile': true in config.")
+            print("⚠️  Disabling torch.compile for debugging (incompatible with monitoring hooks)")
+            ptrain_cfg["torch_compile"] = False
 
     
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -633,64 +632,64 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
     # ======================
     
 
-    dataset_name = ptrain_cfg["dataset_name"]
-    dataset_config = ptrain_cfg["dataset_config"]
+        dataset_name = ptrain_cfg["dataset_name"]
+        dataset_config = ptrain_cfg["dataset_config"]
         
         
-    # Original logic for wikitext and other datasets
-    dataset = load_dataset(dataset_name, dataset_config)
+            # Original logic for wikitext and other datasets
+            dataset = load_dataset(dataset_name, dataset_config)
 
-    print(dataset)
-    
-    block_size = ptrain_cfg["max_seq_length"]
-    eos_id = tokenizer.eos_token_id
-    
-    # 1) Tokenize without truncation/padding
-    def tokenize_function(examples):
-        # add_special_tokens=False keeps things raw; we'll insert EOS between docs
-        return tokenizer(
-            examples["text"],
-            add_special_tokens=False,
+        print(dataset)
+        
+        block_size = ptrain_cfg["max_seq_length"]
+        eos_id = tokenizer.eos_token_id
+        
+        # 1) Tokenize without truncation/padding
+        def tokenize_function(examples):
+            # add_special_tokens=False keeps things raw; we'll insert EOS between docs
+            return tokenizer(
+                examples["text"],
+                add_special_tokens=False,
+            )
+        
+        # 2) Group into contiguous blocks (concat + chunk)
+        def group_texts(examples):
+            # Flatten and insert EOS between documents to avoid cross-article bleed
+            input_ids = []
+            for ids in examples["input_ids"]:
+                if len(ids) > 0:
+                    input_ids.extend(ids)
+                # add an EOS fencepost between docs
+                input_ids.append(eos_id)
+        
+            # Drop the trailing partial block so every example is full length
+            total_length = (len(input_ids) // block_size) * block_size
+            input_ids = input_ids[:total_length]
+        
+            # Split into equal blocks
+            result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
+            # Labels are next-token targets; Trainer/model will do the shift
+            return {
+                "input_ids": result_input_ids,
+                "labels": [ids.copy() for ids in result_input_ids],
+                # Optional attention masks (all ones because no padding)
+                "attention_mask": [[1] * block_size for _ in result_input_ids],
+            }
+        
+        # Tokenize
+        tokenized = dataset.map(
+            tokenize_function,
+            batched=True,
+            num_proc=8,
+            remove_columns=dataset["train"].column_names,  # drop raw "text"
         )
-    
-    # 2) Group into contiguous blocks (concat + chunk)
-    def group_texts(examples):
-        # Flatten and insert EOS between documents to avoid cross-article bleed
-        input_ids = []
-        for ids in examples["input_ids"]:
-            if len(ids) > 0:
-                input_ids.extend(ids)
-            # add an EOS fencepost between docs
-            input_ids.append(eos_id)
-    
-        # Drop the trailing partial block so every example is full length
-        total_length = (len(input_ids) // block_size) * block_size
-        input_ids = input_ids[:total_length]
-    
-        # Split into equal blocks
-        result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
-        # Labels are next-token targets; Trainer/model will do the shift
-        return {
-            "input_ids": result_input_ids,
-            "labels": [ids.copy() for ids in result_input_ids],
-            # Optional attention masks (all ones because no padding)
-            "attention_mask": [[1] * block_size for _ in result_input_ids],
-        }
-    
-    # Tokenize
-    tokenized = dataset.map(
-        tokenize_function,
-        batched=True,
-        num_proc=8,
-        remove_columns=dataset["train"].column_names,  # drop raw "text"
-    )
-    
-    # Concatenate + chunk
-    tokenized = tokenized.map(
-        group_texts,
-        batched=True,
-        num_proc=8,
-    )
+        
+        # Concatenate + chunk
+        tokenized = tokenized.map(
+            group_texts,
+            batched=True,
+            num_proc=8,
+        )
     
     # Use a simple collator; we already created labels and have no pads
     from transformers import default_data_collator
@@ -784,11 +783,6 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
 
         bf16=ptrain_cfg["bf16"],
         fp16=ptrain_cfg["fp16"],
-        
-        # torch.compile configuration for performance optimization
-        torch_compile=ptrain_cfg["torch_compile"],
-        torch_compile_backend=ptrain_cfg["torch_compile_backend"],
-        torch_compile_mode=ptrain_cfg["torch_compile_mode"],
 
         learning_rate=ptrain_cfg["learning_rate"],
         max_steps=ptrain_cfg["num_train_steps"], 
@@ -913,15 +907,15 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
         )
         print("🔍 Using DebugTrainer with enhanced monitoring")
     else:
-        trainer = Trainer(
-            model=model,
-            args=training_args,
-            train_dataset=tokenized["train"],
-            eval_dataset=tokenized["validation"],
-            compute_metrics=perplexity_metric,
-            processing_class=tokenizer,
-            data_collator=data_collator,
-        )
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized["train"],
+        eval_dataset=tokenized["validation"],
+        compute_metrics=perplexity_metric,
+        processing_class=tokenizer,
+        data_collator=data_collator,
+    )
         print("Using standard Trainer")
 
     """## Loop"""
@@ -949,7 +943,7 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
         # Save the json back to disk
         with open(ptrain_cfg["output_dir"] + "/full_config.json", "w") as f:
             json.dump(full_cfg, f, indent=2)
-        
+   
         # Generate debug report if in debug mode
         if enable_debug and hasattr(trainer, 'generate_debug_report'):
             debug_report = trainer.generate_debug_report()
@@ -960,6 +954,18 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
             with open(debug_report_path, "w") as f:
                 f.write(debug_report)
             print(f"Debug report saved to {debug_report_path}")
+            
+            # Print summary of issues detected
+            if hasattr(trainer, 'gradient_monitor') and trainer.gradient_monitor.gradient_norms:
+                high_grad_steps = sum(1 for norm in trainer.gradient_monitor.gradient_norms 
+                                    if norm > trainer.debug_config.gradient_norm_threshold)
+                total_steps = len(trainer.gradient_monitor.gradient_norms)
+                print(f"\n📊 Training Summary:")
+                print(f"  Steps with high gradient norms: {high_grad_steps}/{total_steps} ({high_grad_steps/total_steps*100:.1f}%)")
+                print(f"  Max gradient norm: {max(trainer.gradient_monitor.gradient_norms):.4f}")
+                print(f"  Final loss: {trainer.loss_monitor.losses[-1]:.4f}")
+                if high_grad_steps > total_steps * 0.1:  # More than 10% of steps
+                    print("  ⚠️  Consider: Lower learning rate, gradient clipping, or model initialization")
 
     finally:
         # End the wandb run.
