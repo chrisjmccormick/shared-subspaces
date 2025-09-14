@@ -150,14 +150,14 @@ class SharedSpaceDecoderLayer(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        position_embeddings: torch.Tensor, # RoPE embeddings
+        position_embeddings: tuple[torch.Tensor, torch.Tensor], # RoPE embeddings
         attention_mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
-
 
         # ========================
         #     Self Attention
         # ========================
+        residual_strm = hidden_states
 
         # Normalize the hidden states to create the input to attention.
         attn_input = self.attn_input_norm(hidden_states)
@@ -171,11 +171,12 @@ class SharedSpaceDecoderLayer(nn.Module):
 
         # Add the attention output (the residual) back to the non-normalized
         # hidden_states.
-        hidden_states = hidden_states + attn_output
+        hidden_states = residual_strm + attn_output
 
         # ===========================
         #     Feed-Forward Network
         # ===========================
+        residual_strm = hidden_states
 
         # Normalize the updated hidden states prior to the FFN
         ffn_input = self.ffn_input_norm(hidden_states)
@@ -184,7 +185,7 @@ class SharedSpaceDecoderLayer(nn.Module):
         ffn_output = self.ffn(ffn_input)
 
         # Add the output the un-normalized hidden states.
-        hidden_states = hidden_states + ffn_output
+        hidden_states = residual_strm + ffn_output
 
         return hidden_states
 
