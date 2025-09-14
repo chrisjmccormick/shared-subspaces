@@ -137,8 +137,11 @@ def main(config_path: str):
         wandb.login(key=wandb_api_key)
 
     # ======================
-    #    Prepare Dataset
+    #    Load Dataset
     # ======================
+    
+    dataset_name = ptrain_cfg["dataset_name"]
+    dataset_config = ptrain_cfg["dataset_config"]
     
     # Check if we should load a pre-processed dataset
     if "preprocessed_dataset_path" in ptrain_cfg and ptrain_cfg["preprocessed_dataset_path"]:
@@ -153,143 +156,24 @@ def main(config_path: str):
         # Skip tokenization and chunking since it's already done
         tokenized = dataset
         
+    elif dataset_name == "wikitext":
+        
+        # Original logic for wikitext and other datasets
+        dataset = load_dataset(dataset_name, dataset_config)
+    elif dataset_name == "allenai/c4":
+        raise ValueError(f"allenai/c4 requires prep-processing, but no preprocessed dataset path was provided")
+            
     else:
-        # Handle C4 dataset with efficient streaming and subset selection
-        dataset_name = ptrain_cfg["dataset_name"]
-        dataset_config = ptrain_cfg["dataset_config"]
-        
-        if dataset_name == "c4":
-            # Use streaming for C4 to avoid downloading the entire dataset
-            # and take_first to get exactly the percentage we want
-            dataset_subset_pct = ptrain_cfg["dataset_subset_pct"]
-        
-            if dataset_subset_pct < 1.0:
-                print(f"Loading {dataset_subset_pct*100}% of C4 dataset with streaming...")
-                
-                # Check for cached subset to avoid re-processing
-                cache_dir = f"./data_cache/c4_{dataset_config}_{dataset_subset_pct}"
-                cached_dataset_path = f"{cache_dir}/dataset"
-            
-            if os.path.exists(cached_dataset_path):
-                print(f"Found cached C4 subset at {cached_dataset_path}, loading...")
-                from datasets import load_from_disk
-                dataset = load_from_disk(cached_dataset_path)
-                print(f"Loaded cached dataset:")
-                print(f"  Train: {len(dataset['train']):,} examples")
-                print(f"  Validation: {len(dataset['validation']):,} examples")
-            else:
-                print("No cached subset found, streaming and processing...")
-                
-                # Create cache directory
-                os.makedirs(cache_dir, exist_ok=True)
-                
-                # Load with streaming to avoid memory issues
-                dataset = load_dataset(
-                    dataset_name,
-                    dataset_config,
-                    streaming=True
-                )
-            
-                # Calculate number of examples to take (approximate)
-                # C4 has ~364M examples in train split, so 1% ≈ 3.64M examples
-                if dataset_subset_pct == 0.01:  # 1%
-                    take_examples = 3_640_000
-                else:
-                    # Rough estimate based on known C4 size
-                    take_examples = int(364_000_000 * dataset_subset_pct)
-                
-                print(f"Taking approximately {take_examples:,} examples ({dataset_subset_pct*100}%)")
-                
-                # More efficient approach: use itertools.islice for streaming
-                import itertools
-                from datasets import DatasetDict, Dataset
-                
-                print("Streaming and materializing C4 subset...")
-                
-                # Stream and take only what we need
-                train_dataset = dataset["train"]
-                
-                # For validation, take a smaller subset (0.1% of the train subset)
-                val_examples = max(1000, take_examples // 1000)  # At least 1000 examples
-                
-                # Check if we have cached intermediate training data
-                intermediate_train_path = f"{cache_dir}/train_data_intermediate.json"
-                
-                if os.path.exists(intermediate_train_path):
-                    print(f"Found cached intermediate training data at {intermediate_train_path}, loading...")
-                    import json
-                    with open(intermediate_train_path, 'r', encoding='utf-8') as f:
-                        train_data = json.load(f)
-                    print(f"Loaded {len(train_data):,} training examples from cache")
-                else:
-                    # Convert streaming to list efficiently with progress tracking
-                    print("Processing training examples...")
-                    train_data = []
-                    for i, example in enumerate(itertools.islice(train_dataset, take_examples)):
-                        train_data.append(example)
-                        if i % 100000 == 0 and i > 0:
-                            print(f"  Processed {i:,} / {take_examples:,} training examples ({i/take_examples*100:.1f}%)")
-                    
-                    # Save intermediate training data to disk
-                    print(f"Saving intermediate training data to {intermediate_train_path}...")
-                    import json
-                    with open(intermediate_train_path, 'w', encoding='utf-8') as f:
-                        json.dump(train_data, f)
-                    print("Intermediate training data saved successfully!")
+        raise ValueError(f"Dataset {dataset_name} not supported")
 
-                # Check if we have cached intermediate validation data
-                intermediate_val_path = f"{cache_dir}/val_data_intermediate.json"
-                
-                if os.path.exists(intermediate_val_path):
-                    print(f"Found cached intermediate validation data at {intermediate_val_path}, loading...")
-                    with open(intermediate_val_path, 'r', encoding='utf-8') as f:
-                        val_data = json.load(f)
-                    print(f"Loaded {len(val_data):,} validation examples from cache")
-                else:
-                    print("Processing validation examples...")
-                    val_data = []
-                    # Use a separate stream for validation to get different examples
-                    if "validation" in dataset:
-                        val_dataset = dataset["validation"]
-                    else:
-                        # Skip the training examples we already took and use the next ones for validation
-                        val_dataset = itertools.islice(dataset["train"], take_examples, take_examples + val_examples)
-                    
-                    for i, example in enumerate(itertools.islice(val_dataset, val_examples)):
-                        val_data.append(example)
-                        if i % 10000 == 0 and i > 0:
-                            print(f"  Processed {i:,} / {val_examples:,} validation examples")
-                    
-                    # Save intermediate validation data to disk
-                    print(f"Saving intermediate validation data to {intermediate_val_path}...")
-                    with open(intermediate_val_path, 'w', encoding='utf-8') as f:
-                        json.dump(val_data, f)
-                    print("Intermediate validation data saved successfully!")
-                
-                # Create the final dataset
-                dataset = DatasetDict({
-                    "train": Dataset.from_list(train_data),
-                    "validation": Dataset.from_list(val_data)
-                })
-                
-                print(f"Final dataset sizes:")
-                print(f"  Train: {len(dataset['train']):,} examples")
-                print(f"  Validation: {len(dataset['validation']):,} examples")
-                
-                # Cache the processed dataset for future use
-                print(f"Caching processed dataset to {cached_dataset_path}...")
-                dataset.save_to_disk(cached_dataset_path)
-                print("Dataset cached successfully!")
-            else:
-                # Load full C4 dataset (not recommended due to size)
-                print("Loading full C4 dataset...")
-                dataset = load_dataset(dataset_name, dataset_config)
-        else:
-            # Original logic for wikitext and other datasets
-            dataset = load_dataset(dataset_name, dataset_config)
+    print(dataset)
+    
+    # ========================
+    #    Tokenize Wikitext
+    # ========================
 
-        print(dataset)
-        
+    if dataset_name == "wikitext":
+
         block_size = ptrain_cfg["max_seq_length"]
         eos_id = tokenizer.eos_token_id
         
@@ -339,7 +223,8 @@ def main(config_path: str):
             batched=True,
             num_proc=8,
         )
-    
+
+
     # Use a simple collator; we already created labels and have no pads
     from transformers import default_data_collator
     data_collator = default_data_collator
