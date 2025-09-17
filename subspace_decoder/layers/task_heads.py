@@ -211,7 +211,8 @@ class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
             loss=loss,
             logits=logits,
             past_key_values=None,  # Not implementing KV cache yet
-            hidden_states=hidden_states,
+            #hidden_states=hidden_states,
+            hidden_states=hidden_states if kwargs.get("output_hidden_states", False) else None,
             attentions=None,
         )
 
