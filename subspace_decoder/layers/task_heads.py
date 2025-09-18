@@ -183,27 +183,16 @@ class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
         logits = self.lm_head(hidden_states)
         
         # Compute loss if labels are provided
+        # Previously, we had custom loss computation here, but now we use the 
+        # standard HuggingFace loss function.
         loss = None
         if labels is not None:
-            # Shift logits and labels for causal language modeling
-            # We predict the next token, so compare logits[..., :-1, :] with labels[..., 1:]
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            
-            # Flatten for cross entropy computation
-            # cross_entropy expects [N, C] logits and [N] targets
-            batch_size, seq_len = shift_logits.shape[:2]
-            vocab_size = shift_logits.shape[-1]
-            
-            flat_logits = shift_logits.view(-1, vocab_size)
-            flat_labels = shift_labels.view(-1)
-            
-            # Compute cross entropy loss
-            # ignore_index=-100 ignores padding tokens in loss computation
-            loss = F.cross_entropy(
-                flat_logits, 
-                flat_labels, 
-                ignore_index=-100
+            # Flatten the tokens
+            loss = self.loss_function(
+                logits,
+                labels,
+                vocab_size=self.config.vocab_size,
+                **kwargs,
             )
         
         # Return in HuggingFace format

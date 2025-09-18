@@ -54,6 +54,7 @@
     "wandb_project":        "decoder-pretrain-c4",
     "output_dir":           "checkpoints/gpt2_mla_c4_baseline",
 	"seed":                 42,
+    "logging_steps":        50,
 		
     "train_batch_size":     32,
     "gradient_accumulation_steps": 32,

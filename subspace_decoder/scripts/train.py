@@ -349,7 +349,7 @@ def main(config_path: str):
         eval_steps=ptrain_cfg["eval_steps"],
         eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
 
-        logging_steps=50,
+        logging_steps=ptrain_cfg["logging_steps"],
         metric_for_best_model="eval_loss",
         save_steps=2000,
         save_total_limit=2,           # Optional: keeps last 2 checkpoints

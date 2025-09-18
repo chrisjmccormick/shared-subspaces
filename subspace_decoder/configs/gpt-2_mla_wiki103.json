@@ -1,7 +1,7 @@
 {
 
   "shorthand": "model.768.lyr.12 - seqlen.128 - mla.192.96.0 - ah12.64 - rd32.32",
-  "notes": "MLA Baseline on C4",
+  "notes": "MLA Baseline on wikitext103",
   
   "model": {
   	
@@ -51,10 +51,11 @@
   },
   
   "pre_train": {
-    "wandb_project":        "decoder-pretrain-c4",
-    "output_dir":           "checkpoints/gpt2_mla_c4_baseline",
+    "wandb_project":        "decoder-pretrain-wiki",
+    "output_dir":           "checkpoints/gpt2_mla_wiki_baseline",
 	"seed":                 42,
-		
+    "logging_steps":        50,
+
     "train_batch_size":     32,
     "gradient_accumulation_steps": 32,
     "learning_rate":        5e-04,
