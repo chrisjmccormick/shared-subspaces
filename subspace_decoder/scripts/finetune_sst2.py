@@ -34,7 +34,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.shared_space_config import SharedSpaceDecoderConfig, get_config
-from models.shared_space_decoder import SharedSpaceDecoderForCausalLM 
 from layers.task_heads import SharedSpaceDecoderForCausalLM
 
 try:
@@ -182,8 +181,8 @@ def main():
     ft = sft_cfg["fine_tune"]
     
     # Auto-complete fields from pre-trained model config
-    ft["run_name"] = f"ft-sst2-{ptrain_cfg["run_name"]}"
-    ft["output_dir"] = f"{ptrain_cfg["output_dir"]}/ft_sst2"
+    ft["run_name"] = f"ft-sst2-{ptrain_cfg['run_name']}"
+    ft["output_dir"] = f"{ptrain_cfg['output_dir']}/ft_sst2"
     
 
     seed = ft["seed"]
@@ -241,12 +240,12 @@ def main():
     # ========================
     print("Initializing model...")
     
-    # Identify the added parameter names by looking at the safetensors .json directly
-    ckpt_dict = load_checkpoint_state_dict(full_cfg['pre_train']['best_checkpoint'])
-
-    # Load the model and patch its implementation and weights.
-    model = load_and_patch_model(model_cfg, ckpt_dict)
-
+    # Load the best checkpoint
+    model = SharedSpaceDecoderForCausalLM.from_pretrained(
+        full_cfg['pre_train']['best_checkpoint'],
+        config=model_cfg,
+    )
+       
     # Optional LoRA
     lora_cfg = ft.get("lora", {})
     if lora_cfg.get("enabled", False):
@@ -273,7 +272,7 @@ def main():
     print(model)
 
     print("\n======== Model ========")
-    print(json.dumps(model_cfg, indent=2))
+    print(model_cfg)
 
     print("\n======== Pre-Train ========")
     print(json.dumps(ptrain_cfg, indent=2))
@@ -494,12 +493,12 @@ def main():
         print(f"Test Accuracy: {test_results.metrics['test_accuracy']:.4f}")
 
         # Record the fine-tuning run with the checkpoint.
-        full_cfg["fine_tune"]["run_id"] = wandb.run.id
-        full_cfg["fine_tune"]["run_url"] = wandb.run.url
+        #full_cfg["fine_tune"]["run_id"] = wandb.run.id
+        #full_cfg["fine_tune"]["run_url"] = wandb.run.url
 
         # Save the json back to disk
-        with open(os.path.join(out_dir, "full_config.json"), "w") as f:
-            json.dump(full_cfg, f, indent=2)
+        #with open(os.path.join(out_dir, "full_config.json"), "w") as f:
+        #    json.dump(full_cfg, f, indent=2)
    
     # Ensure we get to call `finish`, even if training is interrupted.
     finally:
