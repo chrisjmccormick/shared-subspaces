@@ -633,11 +633,10 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
     
 
         dataset_name = ptrain_cfg["dataset_name"]
-        dataset_config = ptrain_cfg["dataset_config"]
+        dataset_config = ptrain_cfg["dataset_config"]        
         
-        
-            # Original logic for wikitext and other datasets
-            dataset = load_dataset(dataset_name, dataset_config)
+        # Original logic for wikitext and other datasets
+        dataset = load_dataset(dataset_name, dataset_config)
 
         print(dataset)
         
@@ -907,15 +906,15 @@ def main(config_path: str, enable_debug: bool = True, debug_args: Optional[Dict]
         )
         print("🔍 Using DebugTrainer with enhanced monitoring")
     else:
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=tokenized["train"],
-        eval_dataset=tokenized["validation"],
-        compute_metrics=perplexity_metric,
-        processing_class=tokenizer,
-        data_collator=data_collator,
-    )
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=tokenized["train"],
+            eval_dataset=tokenized["validation"],
+            compute_metrics=perplexity_metric,
+            processing_class=tokenizer,
+            data_collator=data_collator,
+        )
         print("Using standard Trainer")
 
     """## Loop"""
