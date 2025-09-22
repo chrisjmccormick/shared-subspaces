@@ -173,6 +173,7 @@ class SharedSpaceDecoderConfig(PretrainedConfig):
 
         vocab_subspace=False,
         vocab_rank=None,
+        tie_word_embeddings=True,
 
         # === Multi-Head Latent Attention ===
         num_attention_heads: int = 16,
@@ -221,6 +222,7 @@ class SharedSpaceDecoderConfig(PretrainedConfig):
 
         self.vocab_subspace = vocab_subspace
         self.vocab_rank = vocab_rank
+        self.tie_word_embeddings = tie_word_embeddings
 
         # === MLA ===
         self.num_attention_heads = num_attention_heads

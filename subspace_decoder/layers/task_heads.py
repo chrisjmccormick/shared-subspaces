@@ -67,12 +67,8 @@ class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
             bias=False  # Following common practice in modern LMs
         )
         
-        # Tie input and output embeddings
-        # This shares the weight matrix between input embeddings and the language modeling head
-        # The lm_head uses the transpose of the input embedding matrix
-        self.tie_weights()
-        
         # Initialize weights with decoder-specific strategy
+        # Note: tie_weights() will be called automatically by post_init() if config.tie_word_embeddings=True
         self.post_init()
 
     def _init_weights(self, module: nn.Module) -> None:
@@ -128,19 +124,12 @@ class SharedSpaceDecoderForCausalLM(SharedSpaceDecoderPreTrainedModel):
         Note: For vocab subspace models, we need to handle the case where
         input embeddings go through a projection layer.
         """
-        if self.model.vocab_proj is not None:
-            # For decomposed vocabulary embeddings, we cannot directly tie weights
-            # because the embedding path is: token_id -> vocab_embed(vocab_rank) -> vocab_proj(hidden_size)
-            # and the lm_head path is: hidden_states(hidden_size) -> lm_head -> logits(vocab_size)
-            # 
-            # To properly tie weights, we'd need to restructure the computation.
-            # For now, we'll leave them untied in the subspace case.
-            # TODO: Implement proper weight tying for vocab subspace models
-            pass
-        else:
-            # For dense vocabulary embeddings, directly tie the weights
-            # lm_head.weight should be the transpose of vocab_embed.weight
-            self.lm_head.weight = self.model.vocab_embed.weight
+        # Only tie when embeddings live in model space (no vocab_proj)
+        if getattr(self.model, "vocab_proj", None) is None:
+            # Use HF utility for correct tying/cloning semantics
+            self._tie_or_clone_weights(self.lm_head, self.model.vocab_embed)
+        # else: leave untied for subspace case
+
 
     def forward(
         self,
