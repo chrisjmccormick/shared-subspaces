@@ -18,15 +18,19 @@ from models.shared_space_config import SharedSpaceDecoderConfig
 def create_norm_layer(hidden_size: int, config: SharedSpaceDecoderConfig) -> nn.Module:
     """
     Create a normalization layer based on the config norm_type.
-    
+
+    If `hidden_size` is `None`, this returns an identity layer.
+
     Args:
         hidden_size: The dimension to normalize over
         config: Configuration containing norm_type and epsilon values
-    
+
     Returns:
         Either a LayerNorm or RMSNorm layer
     """
-    if config.norm_type == "layernorm":
+    if hidden_size is None:
+        return nn.Identity()
+    elif config.norm_type == "layernorm":
         return nn.LayerNorm(hidden_size, eps=config.layer_norm_eps)
     elif config.norm_type == "rmsnorm":
         return DeepseekV3RMSNorm(hidden_size, eps=config.rms_norm_eps)
@@ -83,6 +87,24 @@ class RotaryEmbedding(nn.Module):
         )
 
         # ------------------------------
+        # Apply RoPE scaling if configured
+        # ------------------------------
+        if config.rope_scaling is not None:
+            scaling_type = config.rope_scaling.get("type", "linear")
+            scaling_factor = config.rope_scaling.get("factor", 1.0)
+
+            if scaling_type == "linear":
+                # Linear scaling: divide frequencies by scaling factor
+                inv_freq = inv_freq / scaling_factor
+            elif scaling_type == "dynamic":
+                # Dynamic scaling: adjust based on sequence length
+                # This is a simplified implementation
+                inv_freq = inv_freq / scaling_factor
+            else:
+                print(f"Warning: Unknown RoPE scaling type '{scaling_type}', using linear scaling")
+                inv_freq = inv_freq / scaling_factor
+
+        # ------------------------------
         # Compute position indices
         # ------------------------------
         # Shape: [seq_len]
@@ -133,10 +155,10 @@ class MultiheadLatentAttention(nn.Module):
         self.layer_idx = layer_idx
         self.attention_dropout_prob = config.attention_dropout_prob
 
-        self.num_heads = config.num_attention_heads 
+        self.num_heads = config.num_attention_heads
 
         self.rope_theta = config.rope_theta
-        self.rope_dims = config.rope_dims 
+        self.rope_dims = config.rope_dims
         self.nope_dims = config.nope_dims
 
         self.q_shared_dim = config.q_shared_dim
@@ -187,25 +209,64 @@ class MultiheadLatentAttention(nn.Module):
             self.latent_spaces = True
 
             # Input latent projections
-            self.q_shared_proj = nn.Linear(
-                config.hidden_size,
-                self.q_shared_dim,
-                bias=config.attention_bias,
-            )
+
+            print("config.q_shared_dim", config.q_shared_dim)
             
-            self.kv_shared_proj = nn.Linear(
-                config.hidden_size,
-                self.kv_shared_dim,
-                bias=config.attention_bias,
-            )
+            # If we're using a shared query subspace,
+            if config.q_shared_dim is not None:
+                # Set a flag that we'll check in `forward`.
+                self.query_shared = True
 
-            # Normalize the latents.
-            self.q_shared_norm = create_norm_layer(self.q_shared_dim, config)
-            self.kv_shared_norm = create_norm_layer(self.kv_shared_dim, config)
+                self.q_shared_proj = nn.Linear(
+                    config.hidden_size,
+                    self.q_shared_dim,
+                    bias=config.attention_bias,
+                )
+                
+                self.q_shared_norm = create_norm_layer(self.q_shared_dim, config)               
+                
+            else:
+                print("Using identity for shared projection.")
+                # Set a flag that we'll check in `forward`.
+                self.query_shared = False
 
+                self.q_shared_dim = config.hidden_size
+
+                #print("Updated self.q_shared_dim to", self.q_shared_dim) 
+                
+                # Use identity.
+                self.q_shared_proj = nn.Identity()
+                self.q_shared_norm = nn.Identity()
+
+            # If we're using a shared key/value subspace,
+            if config.kv_shared_dim is not None:
+                # Set a flag that we'll check in `forward`.
+                self.keyvalue_shared = True
+
+                self.kv_shared_proj = nn.Linear(
+                    config.hidden_size,
+                    self.kv_shared_dim,
+                    bias=config.attention_bias,
+                )
+
+                self.kv_shared_norm = create_norm_layer(self.kv_shared_dim, config)
+                
+            else:
+                # Set a flag that we'll check in `forward`.
+                self.keyvalue_shared = False
+
+                self.kv_shared_dim = config.hidden_size
+                
+                # Use identity.
+                self.kv_shared_proj = nn.Identity()
+                self.kv_shared_norm = nn.Identity()
+
+            #print("config.q_shared_dim", config.q_shared_dim)
+            #print("self.qk_private_dim", self.qk_private_dim)
+            
             # Query heads
             self.q_private_proj = nn.Linear(
-                config.q_shared_dim,
+                self.q_shared_dim,
                 self.num_heads * self.qk_private_dim,
                 bias=False # TODO
             )
@@ -315,7 +376,7 @@ class MultiheadLatentAttention(nn.Module):
             # Output:
             #          q_shared  [B, T, Cq]
             #          kv_shared [B, T, Ckv]
-            
+
             # If we're using a shared query subspace,
             if self.q_shared_dim is not None:
                 q_shared = self.q_shared_proj(hidden_states)
@@ -354,7 +415,7 @@ class MultiheadLatentAttention(nn.Module):
 
             # Project key/value latents onto key and value heads.
             # The key and value heads are all concatenated, each head occupies
-            # Dh columns of the kv_private_proj. This yields the key and value 
+            # Dh columns of the kv_private_proj. This yields the key and value
             # vectors concatenated in the same way.
             #
             # Input:
