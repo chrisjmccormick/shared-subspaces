@@ -7,7 +7,8 @@
     "num_hidden_layers":    12,
     "intermediate_size":    2048,
         
-    "vocab_size":           50257,
+    "vocab_size":               50257,
+    "tie_word_embeddings":      true,
     "max_position_embeddings":  128,
 
     "norm_type":            "layernorm",
@@ -33,7 +34,7 @@
 
     "attention_bias":       false,
 
-    "attention_backend":    "sdpa",
+    "attention_backend":    "flash_attention_2",
 
     "ffn_decompose":     false,
     "ffn_rank":          null,
