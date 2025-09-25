@@ -35,10 +35,6 @@ from transformers import (
     set_seed,
 )
 
-from utils import summarize_parameters, format_size
-# To disable a warning.
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
 # Make sure we can import modules from the decoder package
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,6 +42,10 @@ print("PROJECT_ROOT", PROJECT_ROOT)
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils import summarize_parameters, format_size
+# To disable a warning.
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from layers.patch_o_proj import patch_o_proj_implementation
 
@@ -299,7 +299,7 @@ def main(config_path: str):
 
     wandb.init(
         project="decoder-pretrain-wiki103",
-        name=ptrain_cfg["run_name"],
+        name=f'balance param-compute budget {ptrain_cfg["run_name"]}',
         config=full_cfg
     )
 
