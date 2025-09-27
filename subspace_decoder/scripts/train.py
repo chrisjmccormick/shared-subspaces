@@ -351,7 +351,7 @@ def main(config_path: str):
 
         logging_steps=ptrain_cfg["logging_steps"],
         metric_for_best_model="eval_loss",
-        save_steps=2000, 
+        save_steps=ptrain_cfg["save_steps"], 
         save_total_limit=2,           # Optional: keeps last 2 checkpoints
         save_strategy="steps",
         report_to=["wandb"],

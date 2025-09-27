@@ -1,6 +1,6 @@
 {
-  "shorthand": "model.768.lyr.12 - seqlen.1024 - mla.192.96.0 - ah12.64 - rd32.32",
-  "notes": "GPT-2 run with query space and no output space.",
+  "shorthand": "model.768.lyr.12 - seqlen.1024 - mla.0.96.192 - ah12.64 - rd32.32",
+  "notes": "GPT-2 run with output space and no query space.",
   
   "model": {
     "hidden_size":          768,
@@ -19,9 +19,9 @@
 
     "num_attention_heads":  12,
 
-    "q_shared_dim":         192,
+    "q_shared_dim":         null,
     "kv_shared_dim":        96,
-    "o_shared_dim":         null,    
+    "o_shared_dim":         192,    
 
     "qk_private_dim":       64,
     "vo_private_dim":       64,
@@ -50,7 +50,7 @@
   
   "pre_train": {
     "wandb_project":        "decoder-pretrain-c4",
-    "output_dir":           "checkpoints/gpt-2_seq1024_mla192-96-0",
+    "output_dir":           "checkpoints/gpt-2_seq1024_mla0-96-192",
     "seed":                 42,
     "logging_steps":        50,
     "save_steps":           500,
