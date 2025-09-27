@@ -409,7 +409,7 @@ def main():
 
     wandb.init(
         project="decoder-finetune-sst2",
-        name="balance param-compute budget" + " " + ft.get("run_name", f"ft-sst2-{run_name}"),
+        name=ft.get("run_name", f"ft-sst2-{run_name}"),
         config=full_cfg
     )
     

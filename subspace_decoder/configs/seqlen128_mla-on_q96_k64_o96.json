@@ -68,9 +68,7 @@
     "fp16": false,
     "torch_compile": true,
     "torch_compile_backend": "inductor",
-    "torch_compile_mode": "default",
-
-    "best_checkpoint": "checkpoints/seqlen128_mla-on_q96_k64_o96/checkpoint-12000"
+    "torch_compile_mode": "default"
   },
   "fine_tune": {
     "task": "sst2",

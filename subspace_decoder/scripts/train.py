@@ -299,7 +299,7 @@ def main(config_path: str):
 
     wandb.init(
         project="decoder-pretrain-wiki103",
-        name=f'balance param-compute budget {ptrain_cfg["run_name"]}',
+        name=ptrain_cfg["run_name"],
         config=full_cfg
     )
 
