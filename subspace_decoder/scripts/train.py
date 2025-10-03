@@ -363,7 +363,17 @@ def main(config_path: str):
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
     )
 
-    print(training_args)
+    # Print out all of the settings in TrainingArguments using tabulate.
+    # Note that they are not in alphabetical order, but that the order appears
+    # to be more sensible than that. (e.g., all batch size related arguments
+    # are together).
+    import tabulate
+    print("Training Arguments:")
+    print(tabulate.tabulate(vars(training_args).items(), headers=["Argument", "Value"]))
+
+    # ==========================
+    #     Perplexity Metric
+    # ==========================
 
     import numpy as np
 
