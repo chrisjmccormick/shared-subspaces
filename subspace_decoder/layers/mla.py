@@ -373,7 +373,7 @@ class MultiheadLatentAttention(nn.Module):
             #          kv_shared [B, T, Ckv]
 
             # If we're using a shared query subspace,
-            if self.q_shared_dim is not None:
+            if self.query_shared:
                 q_shared = self.q_shared_proj(hidden_states)
 
                 # Normalize latent vectors, shapes unchanged.
@@ -384,7 +384,7 @@ class MultiheadLatentAttention(nn.Module):
                 q_shared = hidden_states
 
             # If we're using a shared key/value subspace,
-            if self.kv_shared_dim is not None:
+            if self.keyvalue_shared:
 
                 # Project token embeddings into shared subspace.
                 kv_shared = self.kv_shared_proj(hidden_states)
