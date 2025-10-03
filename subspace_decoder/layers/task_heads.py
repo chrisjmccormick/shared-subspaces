@@ -6,8 +6,8 @@ from typing import Optional, Union
 
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from models.shared_space_config import SharedSpaceDecoderConfig
-from models.shared_space_decoder import (
+from ..models.shared_space_config import SharedSpaceDecoderConfig
+from ..models.shared_space_decoder import (
     SharedSpaceDecoderPreTrainedModel,
     SharedSpaceDecoderModel,
     DeepseekV3RMSNorm
@@ -27,7 +27,6 @@ def create_norm_layer(hidden_size: int, config: SharedSpaceDecoderConfig) -> nn.
     if config.norm_type == "layernorm":
         return nn.LayerNorm(hidden_size, eps=config.layer_norm_eps)
     elif config.norm_type == "rmsnorm":
-        from models.shared_space_decoder import DeepseekV3RMSNorm
         return DeepseekV3RMSNorm(hidden_size, eps=config.rms_norm_eps)
     else:
         # This should be caught by config validation, but being defensive

@@ -18,7 +18,7 @@ Norms:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.shared_space_config import SharedSpaceDecoderConfig
+from ..models.shared_space_config import SharedSpaceDecoderConfig
 
 
 def create_norm_layer(hidden_size: int, config: SharedSpaceDecoderConfig) -> nn.Module:

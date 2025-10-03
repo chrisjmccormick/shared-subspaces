@@ -11,16 +11,13 @@ from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_utils import PreTrainedModel
 from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask_for_sdpa
 
-from layers.mla import MultiheadLatentAttention, RotaryEmbedding
-from layers.feedforward import SubspaceFeedForward
-from models.shared_space_config import SharedSpaceDecoderConfig
+from ..layers.mla import MultiheadLatentAttention, RotaryEmbedding
+from ..layers.feedforward import SubspaceFeedForward
+from ..models.shared_space_config import SharedSpaceDecoderConfig
 
-"""`RMSNorm`
-
-From:
-https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/modeling_deepseek.py
-
-TODO - May not need?
+"""
+RMSNorm
+From: https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/modeling_deepseek.py
 """
 
 class DeepseekV3RMSNorm(nn.Module):
@@ -109,12 +106,6 @@ class SharedSpaceDecoderPreTrainedModel(PreTrainedModel):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
-"""# ▂▂▂▂▂▂▂▂▂▂▂▂
-
-# Classes
-"""
-
-"""#### `*Layer`"""
 
 class SharedSpaceDecoderLayer(nn.Module):
     """
@@ -189,7 +180,6 @@ class SharedSpaceDecoderLayer(nn.Module):
 
         return hidden_states
 
-"""#### *Model"""
 
 class SharedSpaceDecoderModel(SharedSpaceDecoderPreTrainedModel):
     """

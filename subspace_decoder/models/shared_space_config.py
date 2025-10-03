@@ -1,8 +1,3 @@
-"""# `shared_space_config.py`
-
-#### `*Config`
-"""
-
 from typing import Optional
 
 import torch
@@ -10,73 +5,6 @@ from torch import nn
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_utils import PreTrainedModel
-
-"""`def make_shorthand`"""
-
-def make_shorthand(model_cfg):
-    """
-    Takes an instance subencoder `*Config` and constructs a shorthand
-    name for the model based on settings.
-    """
-
-    dense_str = str(model_cfg.num_dense_layers) + "mha + "
-
-    if model_cfg.o_shared_dim is not None:
-        o_str = "." + str(model_cfg.o_shared_dim)
-    else:
-        o_str = ""
-
-    # If no output subspace is used, the dimension will show as -1.
-    attn_str = (
-        dense_str
-        + "mla."
-        + str(model_cfg.q_shared_dim)
-        + "."
-        + str(model_cfg.kv_shared_dim)
-        + o_str
-    )
-
-    # MLP Configuration
-    if model_cfg.ffn_decompose:
-        dense_str = (
-            str(model_cfg.num_dense_layers)
-            + "mlp."
-            + str(model_cfg.intermediate_size)
-            + " + "
-        )
-
-        mlp_str = (
-            dense_str
-            + str(model_cfg.num_hidden_layers - model_cfg.num_dense_layers)
-            + "dcmp."
-            + "x"
-            + str(model_cfg.intermediate_size)
-            + "."
-            + str(model_cfg.ffn_rank)
-        )
-    else:
-        mlp_str = "mlp." + str(model_cfg.intermediate_size)
-
-    # Assemble string
-    shorthand = (
-        f"{attn_str} - {mlp_str} - "
-        f"h{model_cfg.hidden_size} - l{model_cfg.num_hidden_layers}"
-    )
-
-    """
-    The run name includes training settings
-
-    run_name = (
-        f"{config['stats']['total_elements']} - "
-        f"{attn_str} - {mlp_str} - "
-        f"h{model_cfg.hidden_size} - l{model_cfg.num_hidden_layers} - "
-        f"bs{ptrain_cfg['train_batch_size']} - lr{lr_str} - "
-        f"seq{ptrain_cfg['max_seq_length']}"
-    )
-    """
-
-    return shorthand
-
 
 class SharedSpaceDecoderConfig(PretrainedConfig):
     r"""
@@ -290,7 +218,6 @@ class SharedSpaceDecoderConfig(PretrainedConfig):
         if self.norm_type not in valid_norm_types:
             raise ValueError(f"Unknown norm type: {self.norm_type}, options are {valid_norm_types}")
 
-#### `get_config`
 
 import json
 
