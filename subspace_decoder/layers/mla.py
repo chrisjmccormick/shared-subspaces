@@ -209,8 +209,6 @@ class MultiheadLatentAttention(nn.Module):
             self.latent_spaces = True
 
             # Input latent projections
-
-            print("config.q_shared_dim", config.q_shared_dim)
             
             # If we're using a shared query subspace,
             if config.q_shared_dim is not None:
@@ -226,13 +224,10 @@ class MultiheadLatentAttention(nn.Module):
                 self.q_shared_norm = create_norm_layer(self.q_shared_dim, config)               
                 
             else:
-                print("Using identity for shared projection.")
                 # Set a flag that we'll check in `forward`.
                 self.query_shared = False
 
                 self.q_shared_dim = config.hidden_size
-
-                #print("Updated self.q_shared_dim to", self.q_shared_dim) 
                 
                 # Use identity.
                 self.q_shared_proj = nn.Identity()
