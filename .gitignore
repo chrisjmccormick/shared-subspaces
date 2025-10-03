@@ -221,3 +221,4 @@ subspace_encoder/trainer_output/
 
 # miniconda file
 miniconda.sh
+/decoder_printouts

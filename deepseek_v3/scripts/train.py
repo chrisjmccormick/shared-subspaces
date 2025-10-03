@@ -47,8 +47,9 @@ print("PROJECT_ROOT", PROJECT_ROOT)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from models.shared_space_config import SharedSpaceDecoderConfig, get_config
-from layers.task_heads import SharedSpaceDecoderForCausalLM
+from layers.patch_o_proj import patch_o_proj_implementation
+
+from transformers import DeepseekV3Config, DeepseekV3ForCausalLM
 
 import torch.nn as nn
 
@@ -84,8 +85,10 @@ def main(config_path: str):
     """Run pre-training using the provided configuration path."""
     
     # Load configuration
-    full_cfg, model_cfg = get_config(config_path)
+    with open(config_path, 'r') as f:
+        full_cfg = json.load(f)
 
+    model_cfg = full_cfg['model']
     ptrain_cfg = full_cfg['pre_train']
 
     # Print out its shorthand name.
@@ -96,24 +99,31 @@ def main(config_path: str):
         full_cfg["stats"] = {}
     
     # Validate mixed precision settings
-    if ptrain_cfg["bf16"] and ptrain_cfg["fp16"]:
+    if ptrain_cfg.get("bf16", False) and ptrain_cfg.get("fp16", False):
         raise ValueError("Cannot enable both bf16 and fp16 simultaneously. Please choose one.")
     
     # Check BFloat16 compatibility if enabled
-    if ptrain_cfg["bf16"]:
+    if ptrain_cfg.get("bf16", False):
         if not check_bf16_support():
             print("BFloat16 requested but not supported. Falling back to FP16.")
             ptrain_cfg["bf16"] = False
             ptrain_cfg["fp16"] = True
     
     # Display torch.compile status
-    if ptrain_cfg["torch_compile"]:
+    if ptrain_cfg.get("torch_compile", False):
         print(f"✓ torch.compile enabled:")
-        print(f"  Backend: {ptrain_cfg['torch_compile_backend']}")
-        print(f"  Mode: {ptrain_cfg['torch_compile_mode']}")
+        print(f"  Backend: {ptrain_cfg.get('torch_compile_backend', 'inductor')}")
+        print(f"  Mode: {ptrain_cfg.get('torch_compile_mode', 'default')}")
         print("  Note: First training step will be slower due to compilation.")
     else:
         print("torch.compile disabled. Enable with 'torch_compile': true in config.")
+
+    # Use the DeepSeek tokenizer
+    #tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-V3")
+    
+    # Set pad token if not already set
+    #if tokenizer.pad_token is None:
+    #    tokenizer.pad_token = tokenizer.eos_token
 
     
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -122,7 +132,7 @@ def main(config_path: str):
     tokenizer.padding_side = "right"
         
     # Verify vocab size matches
-    assert model_cfg.vocab_size == tokenizer.vocab_size
+    assert model_cfg["vocab_size"] == tokenizer.vocab_size
 
     # Set random seed for reproducibility
     set_seed(ptrain_cfg["seed"])
@@ -137,97 +147,69 @@ def main(config_path: str):
         wandb.login(key=wandb_api_key)
 
     # ======================
-    #    Load Dataset
+    #    Prepare Dataset
     # ======================
     
-    dataset_name = ptrain_cfg["dataset_name"]
-    dataset_config = ptrain_cfg["dataset_config"]
-    
-    # Check if we should load a pre-processed dataset
-    if "preprocessed_dataset_path" in ptrain_cfg and ptrain_cfg["preprocessed_dataset_path"]:
-        print(f"Loading pre-processed dataset from: {ptrain_cfg['preprocessed_dataset_path']}")
-        from datasets import load_from_disk
-        
-        dataset = load_from_disk(ptrain_cfg["preprocessed_dataset_path"])
-        print(f"Loaded pre-processed dataset:")
-        print(f"  Train: {len(dataset['train']):,} examples")
-        print(f"  Validation: {len(dataset['validation']):,} examples")
-        
-        # Skip tokenization and chunking since it's already done
-        tokenized = dataset
-        
-    elif dataset_name == "wikitext":
-        
-        # Original logic for wikitext and other datasets
-        dataset = load_dataset(dataset_name, dataset_config)
-    elif dataset_name == "allenai/c4":
-        raise ValueError(f"allenai/c4 requires prep-processing, but no preprocessed dataset path was provided")
-            
-    else:
-        raise ValueError(f"Dataset {dataset_name} not supported")
-
+    dataset = load_dataset(
+        ptrain_cfg["dataset_name"],
+        ptrain_cfg["dataset_config"]
+    )
     print(dataset)
     
-    # ========================
-    #    Tokenize Wikitext
-    # ========================
-
-    if dataset_name == "wikitext":
-
-        block_size = ptrain_cfg["max_seq_length"]
-        eos_id = tokenizer.eos_token_id
-        
-        # 1) Tokenize without truncation/padding
-        def tokenize_function(examples):
-            # add_special_tokens=False keeps things raw; we'll insert EOS between docs
-            return tokenizer(
-                examples["text"],
-                add_special_tokens=False,
-            )
-        
-        # 2) Group into contiguous blocks (concat + chunk)
-        def group_texts(examples):
-            # Flatten and insert EOS between documents to avoid cross-article bleed
-            input_ids = []
-            for ids in examples["input_ids"]:
-                if len(ids) > 0:
-                    input_ids.extend(ids)
-                # add an EOS fencepost between docs
-                input_ids.append(eos_id)
-        
-            # Drop the trailing partial block so every example is full length
-            total_length = (len(input_ids) // block_size) * block_size
-            input_ids = input_ids[:total_length]
-        
-            # Split into equal blocks
-            result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
-            # Labels are next-token targets; Trainer/model will do the shift
-            return {
-                "input_ids": result_input_ids,
-                "labels": [ids.copy() for ids in result_input_ids],
-                # Optional attention masks (all ones because no padding)
-                "attention_mask": [[1] * block_size for _ in result_input_ids],
-            }
-        
-        # Tokenize
-        tokenized = dataset.map(
-            tokenize_function,
-            batched=True,
-            num_proc=8,
-            remove_columns=dataset["train"].column_names,  # drop raw "text"
+    block_size = ptrain_cfg["max_seq_length"]
+    eos_id = tokenizer.eos_token_id
+    
+    # 1) Tokenize without truncation/padding
+    def tokenize_function(examples):
+        # add_special_tokens=False keeps things raw; we’ll insert EOS between docs
+        return tokenizer(
+            examples["text"],
+            add_special_tokens=False,
         )
-        
-        # Concatenate + chunk
-        tokenized = tokenized.map(
-            group_texts,
-            batched=True,
-            num_proc=8,
-        )
-
-
+    
+    # 2) Group into contiguous blocks (concat + chunk)
+    def group_texts(examples):
+        # Flatten and insert EOS between documents to avoid cross-article bleed
+        input_ids = []
+        for ids in examples["input_ids"]:
+            if len(ids) > 0:
+                input_ids.extend(ids)
+            # add an EOS fencepost between docs
+            input_ids.append(eos_id)
+    
+        # Drop the trailing partial block so every example is full length
+        total_length = (len(input_ids) // block_size) * block_size
+        input_ids = input_ids[:total_length]
+    
+        # Split into equal blocks
+        result_input_ids = [input_ids[i:i + block_size] for i in range(0, total_length, block_size)]
+        # Labels are next-token targets; Trainer/model will do the shift
+        return {
+            "input_ids": result_input_ids,
+            "labels": [ids.copy() for ids in result_input_ids],
+            # Optional attention masks (all ones because no padding)
+            "attention_mask": [[1] * block_size for _ in result_input_ids],
+        }
+    
+    # Tokenize
+    tokenized = dataset.map(
+        tokenize_function,
+        batched=True,
+        num_proc=8,
+        remove_columns=dataset["train"].column_names,  # drop raw "text"
+    )
+    
+    # Concatenate + chunk
+    tokenized = tokenized.map(
+        group_texts,
+        batched=True,
+        num_proc=8,
+    )
+    
     # Use a simple collator; we already created labels and have no pads
     from transformers import default_data_collator
     data_collator = default_data_collator
+
 
 
     # ========================
@@ -236,7 +218,24 @@ def main(config_path: str):
 
     print("Initializing model...")
 
-    model = SharedSpaceDecoderForCausalLM(model_cfg)
+    # Strip patch-only keys from HF config
+    lib_cfg_dict = {
+        k: v for k, v in model_cfg.items()
+        if k not in ["use_output_subspace", "o_latent_dim", "o_proj_variant"]
+    }
+
+    # Define the library config and model.
+    lib_cfg = DeepseekV3Config(**lib_cfg_dict)
+    model = DeepseekV3ForCausalLM(lib_cfg)
+
+    if model_cfg['o_proj_variant'] != "vanilla":
+        # Apply the changes based on the variant
+        patch_o_proj_implementation(
+            model, 
+            model_cfg["o_proj_variant"],
+            model_cfg["o_latent_dim"],
+            model_cfg["rms_norm_eps"]
+        )
 
     # ================================
     #       Review Configuration
@@ -246,14 +245,14 @@ def main(config_path: str):
     print(model)
 
     print("\n======== Model ========")
-    print(model_cfg)
+    print(json.dumps(model_cfg, indent=2))
 
     print("\n======== Pre-Train ========")
     print(json.dumps(ptrain_cfg, indent=2))
 
     # Calculate and display effective batch size
     device_batch_size = ptrain_cfg["train_batch_size"]
-    gradient_accumulation_steps = ptrain_cfg["gradient_accumulation_steps"]
+    gradient_accumulation_steps = ptrain_cfg.get("gradient_accumulation_steps", 1)
     effective_batch_size = device_batch_size * gradient_accumulation_steps
     
     print(f"\n======== Batch Size Configuration ========")
@@ -299,7 +298,7 @@ def main(config_path: str):
     """## wandb and TrainingArguments"""
 
     wandb.init(
-        project=ptrain_cfg["wandb_project"],
+        project="decoder-pretrain-wiki103",
         name=ptrain_cfg["run_name"],
         config=full_cfg
     )
@@ -313,15 +312,15 @@ def main(config_path: str):
 
         per_device_train_batch_size=ptrain_cfg["train_batch_size"],
         per_device_eval_batch_size=ptrain_cfg["eval_batch_size"],
-        gradient_accumulation_steps=ptrain_cfg["gradient_accumulation_steps"],
+        gradient_accumulation_steps=ptrain_cfg.get("gradient_accumulation_steps", 1),
 
-        bf16=ptrain_cfg["bf16"],
-        fp16=ptrain_cfg["fp16"],
+        bf16=ptrain_cfg.get("bf16", False),
+        fp16=ptrain_cfg.get("fp16", False),
         
         # torch.compile configuration for performance optimization
-        torch_compile=ptrain_cfg["torch_compile"],
-        torch_compile_backend=ptrain_cfg["torch_compile_backend"],
-        torch_compile_mode=ptrain_cfg["torch_compile_mode"],
+        torch_compile=ptrain_cfg.get("torch_compile", False),
+        torch_compile_backend=ptrain_cfg.get("torch_compile_backend", "inductor"),
+        torch_compile_mode=ptrain_cfg.get("torch_compile_mode", "default"),
 
         learning_rate=ptrain_cfg["learning_rate"],
         max_steps=ptrain_cfg["num_train_steps"], 
@@ -330,12 +329,12 @@ def main(config_path: str):
         #max_grad_norm = 1.0,
         
         # The dataloader is a bottleneck without these.
-        dataloader_num_workers=ptrain_cfg["num_workers"],
-        dataloader_pin_memory=ptrain_cfg["pin_memory"],
+        dataloader_num_workers=ptrain_cfg.get("num_workers", 8),
+        dataloader_pin_memory=ptrain_cfg.get("pin_memory", True),
         # The prefetch factor didn't appear to help.
-        #dataloader_prefetch_factor = ptrain_cfg["prefetch_factor"],
+        #dataloader_prefetch_factor = ptrain_cfg.get("prefetch_factor", 2),
 
-        weight_decay=ptrain_cfg["weight_decay"],  
+        weight_decay=ptrain_cfg.get("weight_decay", 0.01),  
 
         # Learning rate warmup (10% of total steps)
         warmup_steps=int(0.1 * ptrain_cfg["num_train_steps"]),  
@@ -346,34 +345,22 @@ def main(config_path: str):
         # `evaluation_strategy` to `eval_strategy`.
         batch_eval_metrics = True, # To avoid OOM
         eval_strategy="steps",
-        eval_steps=ptrain_cfg["eval_steps"],
+        eval_steps=ptrain_cfg.get("eval_steps", 2000),
         eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
 
-        logging_steps=ptrain_cfg["logging_steps"],
+        logging_steps=50,
         metric_for_best_model="eval_loss",
-        save_steps=ptrain_cfg["save_steps"], 
+        save_steps=2000,
         save_total_limit=2,           # Optional: keeps last 2 checkpoints
         save_strategy="steps",
         report_to=["wandb"],
-
-        save_safetensors=False,
         
         run_name=ptrain_cfg["run_name"],
         
         remove_unused_columns=False,  # Optional: avoid dropping custom model inputs
     )
 
-    # Print out all of the settings in TrainingArguments using tabulate.
-    # Note that they are not in alphabetical order, but that the order appears
-    # to be more sensible than that. (e.g., all batch size related arguments
-    # are together).
-    import tabulate
-    print("Training Arguments:")
-    print(tabulate.tabulate(vars(training_args).items(), headers=["Argument", "Value"]))
-
-    # ==========================
-    #     Perplexity Metric
-    # ==========================
+    print(training_args)
 
     import numpy as np
 

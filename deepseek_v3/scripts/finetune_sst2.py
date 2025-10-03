@@ -33,8 +33,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from models.shared_space_config import SharedSpaceDecoderConfig, get_config
-from layers.task_heads import SharedSpaceDecoderForCausalLM
+from layers.patch_o_proj import load_checkpoint_state_dict, load_and_patch_model, Variant
+
+from transformers import DeepseekV3Config, DeepseekV3ForCausalLM 
 
 try:
     from peft import LoraConfig, get_peft_model
@@ -74,9 +75,9 @@ def _try_bf16_tensor():
 
 def build_label_vocab(tokenizer, ft_cfg):
     # Default label words if not provided
-    label_words = ft_cfg["label_words"]
-    lw0 = label_words["0"]
-    lw1 = label_words["1"]
+    label_words = ft_cfg.get("label_words") or {"0": " negative", "1": " positive"}
+    lw0 = label_words.get("0", " negative")
+    lw1 = label_words.get("1", " positive")
 
     toks0 = tokenizer.tokenize(lw0)
     toks1 = tokenizer.tokenize(lw1)
@@ -100,7 +101,7 @@ def make_prompt_template(ft_cfg):
         " I absolutely loved this film. - positive\n"
         " {sentence} -{label_word}"
     )
-    prompt = ft_cfg["prompt_template"] if "prompt_template" in ft_cfg else default_prompt
+    prompt = ft_cfg.get("prompt_template", default_prompt)
         
     return prompt
 
@@ -172,27 +173,29 @@ def main():
     with open(args.sft_config, "r") as f:
         sft_cfg = json.load(f)
     
-    full_cfg, model_cfg = get_config(args.model_config)
-
+    with open(args.model_config, "r") as f:
+        model_cfg_full = json.load(f)
+    
     # Extract components from model config
-    ptrain_cfg = full_cfg["pre_train"]
+    model_cfg = model_cfg_full["model"]
+    ptrain_cfg = model_cfg_full["pre_train"]
     
     # Extract fine-tune config (with fallbacks from model config if needed)
-    ft = sft_cfg["fine_tune"]
+    ft = sft_cfg.get("fine_tune", {})
     
     # Auto-complete fields from pre-trained model config
-    ft["run_name"] = f"ft-sst2-{ptrain_cfg['run_name']}"
-    ft["output_dir"] = f"{ptrain_cfg['output_dir']}/ft_sst2"
+    ft["run_name"] = f"ft-sst2-{ptrain_cfg["run_name"]}"
+    ft["output_dir"] = f"{ptrain_cfg["output_dir"]}/ft_sst2"
     
 
-    seed = ft["seed"]
+    seed = ft.get("seed", 42)
     set_seed(seed)
 
     # Tokenizer selection
-    tok_name = ft["tokenizer_name_or_path"]  # recommended
+    tok_name = ft.get("tokenizer_name_or_path")  # recommended
     if tok_name is None:
         # Fallback heuristic by vocab size
-        tok_name = "gpt2" if model_cfg.vocab_size <= 60000 else "deepseek-ai/DeepSeek-V3"
+        tok_name = "gpt2" if model_cfg.get("vocab_size", 0) <= 60000 else "deepseek-ai/DeepSeek-V3"
     tokenizer = AutoTokenizer.from_pretrained(tok_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -217,7 +220,7 @@ def main():
     # Safety guard: filter any unlabeled rows (label == -1)
     ds = ds.filter(lambda ex: ex["label"] != -1)
 
-    max_seq_length = ft["max_seq_length"]
+    max_seq_length = ft.get("max_seq_length", 128)
     
     ds = map_with_prompt(ds, tokenizer, label_val_to_word, label_val_to_token_id, prompt_template, max_seq_length)
     
@@ -240,12 +243,12 @@ def main():
     # ========================
     print("Initializing model...")
     
-    # Load the best checkpoint
-    model = SharedSpaceDecoderForCausalLM.from_pretrained(
-        full_cfg['pre_train']['best_checkpoint'],
-        config=model_cfg,
-    )
-       
+    # Identify the added parameter names by looking at the safetensors .json directly
+    ckpt_dict = load_checkpoint_state_dict(full_cfg['pre_train']['best_checkpoint'])
+
+    # Load the model and patch its implementation and weights.
+    model = load_and_patch_model(model_cfg, ckpt_dict)
+
     # Optional LoRA
     lora_cfg = ft.get("lora", {})
     if lora_cfg.get("enabled", False):
@@ -272,7 +275,7 @@ def main():
     print(model)
 
     print("\n======== Model ========")
-    print(model_cfg)
+    print(json.dumps(model_cfg, indent=2))
 
     print("\n======== Pre-Train ========")
     print(json.dumps(ptrain_cfg, indent=2))
@@ -299,8 +302,8 @@ def main():
 
     
     # Precision / compile
-    bf16 = ft["bf16"] and _bf16_ok()
-    fp16 = ft["fp16"] if not bf16 else False
+    bf16 = ft.get("bf16", True) and _bf16_ok()
+    fp16 = ft.get("fp16", False) if not bf16 else False
 
     # Custom collator to handle variable-length sequences properly
     import torch.nn.functional as F
@@ -347,14 +350,14 @@ def main():
     )
 
     # Output dir (already handled in auto-completion above)
-    out_dir = ft["output_dir"]
+    out_dir = ft.get("output_dir")
 
     # Steps vs epochs
-    max_steps = ft["max_steps"]  # preferred for speed/consistency
+    max_steps = ft.get("max_steps")  # preferred for speed/consistency
 
     # Warmup
-    warmup_ratio = ft["warmup_ratio"] if "warmup_ratio" in ft else 0.1
-    warmup_steps = ft["warmup_steps"] if "warmup_steps" in ft else None  # override if provided
+    warmup_ratio = ft.get("warmup_ratio", 0.1)
+    warmup_steps = ft.get("warmup_steps")  # override if provided
 
     # Metrics: accuracy on the label token using LM head
     pos_id = label_val_to_token_id[1]
@@ -417,8 +420,8 @@ def main():
     # ========================================
 
     wandb.init(
-        project=ft["wandb_project"],
-        name=f"ft-sst2-{ft['run_name']}",
+        project="decoder-finetune-sst2",
+        name=ft.get("run_name", f"ft-sst2-{run_name}"),
         config=full_cfg
     )
     
@@ -427,24 +430,24 @@ def main():
         output_dir=out_dir,
         per_device_train_batch_size=ft["train_batch_size"],
         per_device_eval_batch_size=ft["eval_batch_size"],
-        gradient_accumulation_steps=ft["gradient_accumulation_steps"],
-        learning_rate=ft["learning_rate"],
-        weight_decay=ft["weight_decay"],
+        gradient_accumulation_steps=ft.get("gradient_accumulation_steps", 1),
+        learning_rate=ft.get("learning_rate", 1e-4),
+        weight_decay=ft.get("weight_decay", 0.01),
         bf16=bf16,
         fp16=fp16,
         # TODO - Not planning to use this for now. Also, torch_compile auto-sets to true
         #        if you specify (the backend?).
-        #torch_compile=ft["torch_compile"],
-        #torch_compile_backend=ft["torch_compile_backend"],
-        #torch_compile_mode=ft["torch_compile_mode"],
+        #torch_compile=ft.get("torch_compile", True),
+        #torch_compile_backend=ft.get("torch_compile_backend", "inductor"),
+        #torch_compile_mode=ft.get("torch_compile_mode", "default"),
         eval_strategy="steps",
-        eval_steps=ft["eval_steps"],
-        save_strategy=ft["save_strategy"],
-        save_steps=ft["save_steps"] if ft["save_strategy"] != "no" else None,
-        save_total_limit=ft["save_total_limit"],
-        logging_steps=ft["logging_steps"],
-        report_to=["wandb"] if ft["report_to_wandb"] else [],
-        run_name=ft["run_name"],
+        eval_steps=ft.get("eval_steps", 100),
+        save_strategy=ft.get("save_strategy", "steps"),
+        save_steps=ft.get("save_steps", 500) if ft.get("save_strategy", "steps") != "no" else None,
+        save_total_limit=ft.get("save_total_limit", 2),
+        logging_steps=ft.get("logging_steps", 20),
+        report_to=["wandb"] if ft.get("report_to_wandb", True) else [],
+        run_name=ft.get("run_name", f"ft-sst2-{run_name}"),
         remove_unused_columns=False,
         metric_for_best_model="accuracy",
         greater_is_better=True,
@@ -493,12 +496,12 @@ def main():
         print(f"Test Accuracy: {test_results.metrics['test_accuracy']:.4f}")
 
         # Record the fine-tuning run with the checkpoint.
-        #full_cfg["fine_tune"]["run_id"] = wandb.run.id
-        #full_cfg["fine_tune"]["run_url"] = wandb.run.url
+        full_cfg["fine_tune"]["run_id"] = wandb.run.id
+        full_cfg["fine_tune"]["run_url"] = wandb.run.url
 
         # Save the json back to disk
-        #with open(os.path.join(out_dir, "full_config.json"), "w") as f:
-        #    json.dump(full_cfg, f, indent=2)
+        with open(os.path.join(out_dir, "full_config.json"), "w") as f:
+            json.dump(full_cfg, f, indent=2)
    
     # Ensure we get to call `finish`, even if training is interrupted.
     finally:
