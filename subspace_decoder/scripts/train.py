@@ -69,8 +69,8 @@ def patch_attention_with_output_latent(model, o_latent_dim: int):
     for i, layer in enumerate(model.model.layers):
         attn = layer.self_attn
         in_features = attn.num_heads * attn.v_head_dim
-        out_features = attn.hidden_size
-        bias = getattr(attn.config, "attention_bias", False)
+        out_features = model.config.hidden_size  # Get from model config instead
+        bias = getattr(model.config, "attention_bias", False)  # Also get bias from model config
 
         attn.o_proj = nn.Sequential(
             nn.Linear(in_features, o_latent_dim, bias=False),   # O_a (no bias like your code)
@@ -369,7 +369,6 @@ def main(config_path: str):
         # Evaluate every 2,000 steps
         # Note: Recent versions of Trainer changed the name from 
         # `evaluation_strategy` to `eval_strategy`.
-        batch_eval_metrics = True, # To avoid OOM
         eval_strategy="steps",
         eval_steps=ptrain_cfg["eval_steps"],
         eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
