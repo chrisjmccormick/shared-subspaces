@@ -14,50 +14,9 @@ from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_utils import PreTrainedModel
 from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask_for_sdpa
 
-from layers.linkspace_mla import LinkedSpaceMLA, RotaryEmbedding
-from layers.linkspace_feedforward import LinkedSpaceFeedForward
+from layers.linkspace_mla import RotaryEmbedding
+from layers.linkspace_layer import LinkedSpaceDecoderLayer, DeepseekV3RMSNorm
 from models.linkspace_config import LinkedSpaceDecoderConfig
-
-"""`RMSNorm`
-
-From:
-https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/modeling_deepseek.py
-"""
-
-class DeepseekV3RMSNorm(nn.Module):
-    def __init__(self, hidden_size, eps=1e-6):
-        """
-        DeepseekV3RMSNorm is equivalent to T5LayerNorm
-        """
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
-        self.variance_epsilon = eps
-
-    def forward(self, hidden_states):
-        input_dtype = hidden_states.dtype
-        hidden_states = hidden_states.to(torch.float32)
-        variance = hidden_states.pow(2).mean(-1, keepdim=True)
-        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
-        return self.weight * hidden_states.to(input_dtype)
-
-def create_norm_layer(hidden_size: int, config: LinkedSpaceDecoderConfig) -> nn.Module:
-    """
-    Create a normalization layer based on the config norm_type.
-    
-    Args:
-        hidden_size: The dimension to normalize over
-        config: Configuration containing norm_type and epsilon values
-    
-    Returns:
-        Either a LayerNorm or RMSNorm layer
-    """
-    if config.norm_type == "layernorm":
-        return nn.LayerNorm(hidden_size, eps=config.layer_norm_eps)
-    elif config.norm_type == "rmsnorm":
-        return DeepseekV3RMSNorm(hidden_size, eps=config.rms_norm_eps)
-    else:
-        # This should be caught by config validation, but being defensive
-        raise ValueError(f"Unknown norm_type: {config.norm_type}")
 
 """#### *PreTrainedModel"""
 
@@ -101,73 +60,6 @@ class LinkedSpaceDecoderPreTrainedModel(PreTrainedModel):
 
 # Classes
 """
-
-"""#### `*Layer`"""
-
-class LinkedSpaceDecoderLayer(nn.Module):
-    """
-    A single decoder layer with LinkedSpace architecture.
-    
-    Combines attention and feed-forward with flexible space-to-module mappings.
-    """
-
-    def __init__(self, config: LinkedSpaceDecoderConfig, layer_idx: int) -> None:
-
-        super().__init__()
-
-        # Norm applied prior to attention.
-        self.attn_input_norm = create_norm_layer(config.hidden_size, config)
-        
-        # Attention block
-        self.self_attn = LinkedSpaceMLA(config, layer_idx)
-
-        # Norm applied prior to FFN
-        self.ffn_input_norm = create_norm_layer(config.hidden_size, config)
-
-        # Feed-forward network used after attention
-        self.ffn = LinkedSpaceFeedForward(config, layer_idx)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        position_embeddings: tuple[torch.Tensor, torch.Tensor], # RoPE embeddings
-        attention_mask: Optional[torch.Tensor],
-    ) -> torch.Tensor:
-
-        # ========================
-        #     Self Attention
-        # ========================
-        residual_strm = hidden_states
-
-        # Normalize the hidden states to create the input to attention.
-        attn_input = self.attn_input_norm(hidden_states)
-
-        # Evaluate
-        attn_output = self.self_attn(
-            attn_input,
-            position_embeddings,
-            attention_mask,
-        )
-
-        # Add the attention output (the residual) back to the non-normalized
-        # hidden_states.
-        hidden_states = residual_strm + attn_output
-
-        # ===========================
-        #     Feed-Forward Network
-        # ===========================
-        residual_strm = hidden_states
-
-        # Normalize the updated hidden states prior to the FFN
-        ffn_input = self.ffn_input_norm(hidden_states)
-
-        # Evaluate
-        ffn_output = self.ffn(ffn_input)
-
-        # Add the output the un-normalized hidden states.
-        hidden_states = residual_strm + ffn_output
-
-        return hidden_states
 
 """#### *Model"""
 

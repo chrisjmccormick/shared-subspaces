@@ -60,9 +60,7 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
     - max_position_embeddings (`int`) — Max sequence length.
     - initializer_range (`float`) — Stddev of weight init.
 
-    - layer_norm_eps (`float`) — Epsilon for LayerNorm.
-    - rms_norm_eps (`float`) — Epsilon for RMSNorm
-    - norm_type (`str`) — Type of normalization ("layernorm" or "rmsnorm")
+    - rms_norm_eps (`float`) — Epsilon for RMSNorm (all norms are RMSNorm)
 
     - classifier_dropout (`float` or None) — Dropout for final classifier.
 
@@ -75,16 +73,17 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
     - spaces (`dict`) — Dictionary mapping space IDs to space configurations.
       Each space config has:
         - size (`int`) — Dimension of the shared subspace
-        - norm (`bool`) — Whether to apply normalization in this space
         - modules (`list`) — List of module names using this space
           Valid module names:
             Attention: "Q", "K", "V", "O"
             FFN: "in", "gate", "out"
       
+      All spaces use RMSNorm normalization (always enabled).
+      
       Example:
         spaces = {
-            0: {"size": 768, "norm": True, "modules": ["K", "V", "Q", "in", "gate", "out"]},
-            1: {"size": 256, "norm": True, "modules": ["O"]}
+            0: {"size": 768, "modules": ["K", "V", "Q", "in", "gate", "out"]},
+            1: {"size": 256, "modules": ["O"]}
         }
 
     - num_attention_heads (`int`) — Number of attention heads.
@@ -118,9 +117,7 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
         attention_dropout_prob=0.1,
         max_position_embeddings: int = 2048,
         initializer_range=0.02,
-        layer_norm_eps=1e-12,
         rms_norm_eps=1e-6,
-        norm_type="layernorm",  # Choice between "layernorm" and "rmsnorm"
         classifier_dropout=None,
 
         vocab_subspace=False,
@@ -160,9 +157,7 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
         self.attention_dropout_prob = attention_dropout_prob
         self.max_position_embeddings = max_position_embeddings
         self.initializer_range = initializer_range
-        self.layer_norm_eps = layer_norm_eps
         self.rms_norm_eps = rms_norm_eps
-        self.norm_type = norm_type
         self.classifier_dropout = classifier_dropout
 
         self.vocab_subspace = vocab_subspace
@@ -173,7 +168,7 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
         # If no spaces provided, default to a simple configuration
         if spaces is None:
             spaces = {
-                0: {"size": hidden_size, "norm": False, "modules": ["Q", "K", "V", "O", "in", "gate", "out"]}
+                0: {"size": hidden_size, "modules": ["Q", "K", "V", "O", "in", "gate", "out"]}
             }
         self.spaces = spaces
 
@@ -219,8 +214,6 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
                 raise ValueError(f"Space {space_id} must have 'size' key")
             if 'modules' not in space_config:
                 raise ValueError(f"Space {space_id} must have 'modules' key")
-            if 'norm' not in space_config:
-                raise ValueError(f"Space {space_id} must have 'norm' key")
             
             # Validate module names
             for module in space_config['modules']:
@@ -251,11 +244,6 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
         valid_backends = ["eager", "flash_attention_2", "sdpa"]
         if self.attention_backend not in valid_backends:
             raise ValueError(f"Unknown attention backend: {self.attention_backend}, options are {valid_backends}")
-        
-        # === Norm Type ===
-        valid_norm_types = ["layernorm", "rmsnorm"]
-        if self.norm_type not in valid_norm_types:
-            raise ValueError(f"Unknown norm type: {self.norm_type}, options are {valid_norm_types}")
 
     def get_space_for_module(self, module: str) -> Optional[int]:
         """
@@ -270,21 +258,6 @@ class LinkedSpaceDecoderConfig(PretrainedConfig):
         for space_id, space_config in self.spaces.items():
             if module in space_config['modules']:
                 return space_id
-        return None
-    
-    def get_module_space_config(self, module: str) -> Optional[Dict[str, Any]]:
-        """
-        Get the space configuration for a given module.
-        
-        Args:
-            module: Module name
-            
-        Returns:
-            Space config dict if module is in a space, None otherwise
-        """
-        space_id = self.get_space_for_module(module)
-        if space_id is not None:
-            return self.spaces[space_id]
         return None
 
 

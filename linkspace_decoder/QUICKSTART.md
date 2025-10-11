@@ -16,14 +16,14 @@ You get a unified `spaces` configuration:
 
 ```python
 spaces = {
-    0: {"size": 768, "norm": True, "modules": ["K", "V", "Q", "in", "gate", "out"]},
-    1: {"size": 256, "norm": True, "modules": ["O"]}
+    0: {"size": 768, "modules": ["K", "V", "Q", "in", "gate", "out"]},
+    1: {"size": 256, "modules": ["O"]}
 }
 ```
 
 This allows you to:
 - Group any modules together (attention & FFN can share spaces!)
-- Control normalization per space
+- Use uniform RMSNorm across all spaces
 - Experiment with cross-module dependencies
 
 ## Quick Test
@@ -81,8 +81,8 @@ from models.linkspace_decoder import LinkedSpaceDecoderModel
 
 # Define your space configuration
 spaces = {
-    0: {"size": 512, "norm": True, "modules": ["Q", "K", "V", "O"]},
-    1: {"size": 256, "norm": True, "modules": ["in", "gate", "out"]}
+    0: {"size": 512, "modules": ["Q", "K", "V", "O"]},
+    1: {"size": 256, "modules": ["in", "gate", "out"]}
 }
 
 config = LinkedSpaceDecoderConfig(

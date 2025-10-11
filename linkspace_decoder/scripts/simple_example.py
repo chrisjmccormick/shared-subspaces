@@ -27,12 +27,10 @@ def create_simple_model():
     spaces = {
         0: {
             "size": 256,
-            "norm": True,
             "modules": ["Q", "K", "V", "O"]
         },
         1: {
             "size": 128,
-            "norm": True,
             "modules": ["in", "gate", "out"]
         }
     }
@@ -51,7 +49,6 @@ def create_simple_model():
         max_position_embeddings=256,
         spaces=spaces,
         num_dense_layers=1,  # First layer uses standard attention
-        norm_type="rmsnorm",
     )
     
     print("\nConfiguration:")
@@ -59,11 +56,10 @@ def create_simple_model():
     print(f"  Num layers: {config.num_hidden_layers}")
     print(f"  Num heads: {config.num_attention_heads}")
     print(f"  Dense layers: {config.num_dense_layers}")
-    print(f"\nSpace Configuration:")
+    print(f"\nSpace Configuration (all use RMSNorm):")
     for space_id, space_config in config.spaces.items():
         print(f"  Space {space_id}:")
         print(f"    Size: {space_config['size']}")
-        print(f"    Norm: {space_config['norm']}")
         print(f"    Modules: {', '.join(space_config['modules'])}")
     
     # Create model

@@ -213,7 +213,7 @@ model = LinkedSpaceDecoderForCausalLM(config)
 ### Other Parameters
 
 - `num_dense_layers` (int): Number of initial layers without linkspaces
-- `norm_type` (str): `"layernorm"` or `"rmsnorm"`
+- `rms_norm_eps` (float): Epsilon for RMSNorm (all norms use RMSNorm)
 - `attention_bias` (bool): Whether to use bias in attention projections
 - `vocab_subspace` (bool): Whether to decompose vocabulary embeddings
 - `tie_word_embeddings` (bool): Whether to tie input/output embeddings
@@ -223,8 +223,9 @@ model = LinkedSpaceDecoderForCausalLM(config)
 The config automatically validates:
 - All modules must be assigned to exactly one space
 - Module names must be valid (Q, K, V, O, in, gate, out)
-- Each space must have `size`, `norm`, and `modules` keys
+- Each space must have `size` and `modules` keys
 - Private dimensions must be specified
+- All spaces use RMSNorm normalization (always enabled)
 
 ## Comparison with SubspaceDecoder
 
