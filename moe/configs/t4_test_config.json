@@ -72,8 +72,8 @@
     "num_workers":          2,
     "pin_memory":           true,
 
-    "dataset_name":         "wikitext",
-    "dataset_config":       "wikitext-103-raw-v1",
+    "dataset_name":         "yujiepan/wikitext-tiny",
+    "dataset_config":       "default",
     "dataset_subset_pct":   null,
 
     "max_seq_length":       128,
