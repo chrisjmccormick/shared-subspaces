@@ -9,13 +9,14 @@ noisy top-k dispatch with explicit capacity enforcement.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..models.shared_space_config import SparseMoEDecoderConfig
+if TYPE_CHECKING:
+    from ..models.shared_space_config import SparseMoEDecoderConfig
 from ..utils import create_norm_layer
 
 
@@ -57,7 +58,7 @@ class ExpertSwiGLU(nn.Module):
           -> W_out -> W_out_shared
     """
 
-    def __init__(self, config: SparseMoEDecoderConfig, layer_idx: int) -> None:
+    def __init__(self, config: 'SparseMoEDecoderConfig', layer_idx: int) -> None:
         super().__init__()
 
         self.hidden_dim = config.hidden_size
@@ -193,7 +194,7 @@ class SparseMoEFeedForward(nn.Module):
         3. Expert outputs are weighted by router probabilities and gathered.
     """
 
-    def __init__(self, config: SparseMoEDecoderConfig, layer_idx: int) -> None:
+    def __init__(self, config: 'SparseMoEDecoderConfig', layer_idx: int) -> None:
         super().__init__()
 
         self.config = config

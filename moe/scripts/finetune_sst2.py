@@ -26,15 +26,9 @@ from transformers import (
     set_seed,
 )
 
-from utils import summarize_parameters, format_size
-
-# Project import path (same pattern as your train.py)
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from models.shared_space_config import SparseMoEDecoderConfig, get_config
-from layers.task_heads import SparseMoEDecoderForCausalLM
+from ..utils import summarize_parameters, format_size
+from ..models.shared_space_config import SparseMoEDecoderConfig, get_config
+from ..layers.task_heads import SparseMoEDecoderForCausalLM
 
 try:
     from peft import LoraConfig, get_peft_model
@@ -227,7 +221,7 @@ def main():
     # and then use the provided "validation" set as our test set.
     train_split = int(0.9 * len(ds["train"]))
     train_dataset = Subset(ds["train"], range(train_split))
-    val_dataset = Subset(ds["train"], range(train_split, len(ds["train"])))
+    val_dataset = Subset(ds["train"], range(train_split, len(ds["train"]))))
     test_dataset = ds["validation"]
     
     print(f"\nDataset splits:")

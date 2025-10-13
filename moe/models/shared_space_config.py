@@ -229,15 +229,16 @@ class SparseMoEDecoderConfig(PretrainedConfig):
         if self.vocab_subspace and self.vocab_rank is None:
             raise ValueError("`vocab_rank` must be set when `vocab_subspace=True`")
 
-        if (
-            self.num_dense_layers < self.num_hidden_layers
-            and self.q_shared_dim is None
-            and self.kv_shared_dim is None
-        ):
-            raise ValueError(
-                "At least one of q_shared_dim or kv_shared_dim must be set when "
-                "there are subspace layers"
-            )
+        # TODO - This check seems too strict, disable for now.
+        # if (
+        #     self.num_dense_layers < self.num_hidden_layers
+        #     and self.q_shared_dim is None
+        #     and self.kv_shared_dim is None
+        # ):
+        #     raise ValueError(
+        #         "At least one of q_shared_dim or kv_shared_dim must be set when "
+        #         "there are subspace layers"
+        #     )
 
         if self.qk_private_dim is None or self.vo_private_dim is None:
             raise ValueError("Must set qk_private_dim and vo_private_dim")

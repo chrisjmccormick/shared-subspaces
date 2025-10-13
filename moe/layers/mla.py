@@ -1,3 +1,4 @@
+
 """# ▂▂▂▂▂▂▂▂▂▂▂▂
 
 # `mla.py`
@@ -7,17 +8,18 @@ Based on: https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/modeling_deep
 ## RotaryEmbedding
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..models.shared_space_config import SparseMoEDecoderConfig
+if TYPE_CHECKING:
+    from ..models.shared_space_config import SparseMoEDecoderConfig
 from ..utils import create_norm_layer as base_create_norm_layer
 
 
-def create_norm_layer(hidden_size: Optional[int], config: SparseMoEDecoderConfig) -> nn.Module:
+def create_norm_layer(hidden_size: Optional[int], config: 'SparseMoEDecoderConfig') -> nn.Module:
     """
     Create a normalization layer based on the config norm_type.
 
@@ -53,7 +55,7 @@ def rotate_half(x):
 class RotaryEmbedding(nn.Module):
     """Precompute RoPE embeddings and store them as buffers."""
 
-    def __init__(self, config: SparseMoEDecoderConfig) -> None:
+    def __init__(self, config: 'SparseMoEDecoderConfig') -> None:
         super().__init__()
 
         dim = config.rope_dims
@@ -129,7 +131,7 @@ class MultiheadLatentAttention(nn.Module):
     - Optional output subspace
     """
 
-    def __init__(self, config: SparseMoEDecoderConfig, layer_idx: int):
+    def __init__(self, config: 'SparseMoEDecoderConfig', layer_idx: int):
         super().__init__()
 
         self.config = config

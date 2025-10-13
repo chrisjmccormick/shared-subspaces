@@ -8,11 +8,8 @@ import torch
 import sys
 import os
 
-# Add the package root to path so modules can be imported when running standalone.
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from models.shared_space_config import SparseMoEDecoderConfig
-from layers.mla import MultiheadLatentAttention
+from ..models.shared_space_config import SparseMoEDecoderConfig
+from ..layers.mla import MultiheadLatentAttention
 
 
 def test_norm_types():
@@ -46,13 +43,13 @@ def test_norm_types():
     mla_layernorm = MultiheadLatentAttention(layernorm_config, layer_idx=2)
     
     # Verify the norm layers are LayerNorm
-    assert hasattr(mla_layernorm, 'q_a_norm')
-    assert hasattr(mla_layernorm, 'kv_a_norm')
-    assert hasattr(mla_layernorm, 'o_a_norm')
+    assert hasattr(mla_layernorm, 'q_shared_norm')
+    assert hasattr(mla_layernorm, 'kv_shared_norm')
+    assert hasattr(mla_layernorm, 'o_private_norm')
     
-    assert type(mla_layernorm.q_a_norm).__name__ == 'LayerNorm'
-    assert type(mla_layernorm.kv_a_norm).__name__ == 'LayerNorm'
-    assert type(mla_layernorm.o_a_norm).__name__ == 'LayerNorm'
+    assert type(mla_layernorm.q_shared_norm).__name__ == 'LayerNorm'
+    assert type(mla_layernorm.kv_shared_norm).__name__ == 'LayerNorm'
+    assert type(mla_layernorm.o_private_norm).__name__ == 'LayerNorm'
     
     print("✓ LayerNorm configuration works correctly")
     
@@ -67,9 +64,9 @@ def test_norm_types():
     mla_rmsnorm = MultiheadLatentAttention(rmsnorm_config, layer_idx=2)
     
     # Verify the norm layers are RMSNorm
-    assert type(mla_rmsnorm.q_a_norm).__name__ == 'DeepseekV3RMSNorm'
-    assert type(mla_rmsnorm.kv_a_norm).__name__ == 'DeepseekV3RMSNorm'
-    assert type(mla_rmsnorm.o_a_norm).__name__ == 'DeepseekV3RMSNorm'
+    assert type(mla_rmsnorm.q_shared_norm).__name__ == 'DeepseekV3RMSNorm'
+    assert type(mla_rmsnorm.kv_shared_norm).__name__ == 'DeepseekV3RMSNorm'
+    assert type(mla_rmsnorm.o_private_norm).__name__ == 'DeepseekV3RMSNorm'
     
     print("✓ RMSNorm configuration works correctly")
     

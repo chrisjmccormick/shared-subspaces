@@ -7,11 +7,8 @@ import torch
 import sys
 import os
 
-# Add the parent directory to the path so we can import modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from models.shared_space_config import SparseMoEDecoderConfig
-from layers.mla import MultiheadLatentAttention
+from ..models.shared_space_config import SparseMoEDecoderConfig
+from ..layers.mla import MultiheadLatentAttention
 
 
 def test_projection_combinations():

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-# Sparse MoE pre-training script mirroring `subspace_decoder/scripts/train.py`
+# -*- coding: utf-8 -*- 
+# Sparse MoE pre-training script mirroring `subspace_decoder/scripts/train.py` 
 
 
 import os
@@ -33,20 +33,12 @@ from transformers import (
     set_seed,
 )
 
-from utils import summarize_parameters, format_size
+from ..utils import summarize_parameters, format_size
 # To disable a warning.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# Make sure we can import modules from the decoder package
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-print("PROJECT_ROOT", PROJECT_ROOT)
-
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from models.shared_space_config import SparseMoEDecoderConfig, get_config
-from layers.task_heads import SparseMoEDecoderForCausalLM
+from ..models.shared_space_config import SparseMoEDecoderConfig, get_config
+from ..layers.task_heads import SparseMoEDecoderForCausalLM
 
 import torch.nn as nn
 from transformers import DeepseekV3ForCausalLM
@@ -180,9 +172,9 @@ def main(config_path: str):
     if wandb_api_key:
         wandb.login(key=wandb_api_key)
 
-    # ======================
+    # ====================== 
     #    Load Dataset
-    # ======================
+    # ====================== 
     
     dataset_name = ptrain_cfg["dataset_name"]
     dataset_config = ptrain_cfg["dataset_config"]
@@ -212,9 +204,9 @@ def main(config_path: str):
 
     print(dataset)
     
-    # ========================
+    # ======================== 
     #    Tokenize Wikitext
-    # ========================
+    # ======================== 
 
     if dataset_name == "wikitext":
 
@@ -274,17 +266,17 @@ def main(config_path: str):
     data_collator = default_data_collator
 
 
-    # ========================
+    # ======================== 
     #    Initialize Model
-    # ========================
+    # ======================== 
 
     print("Initializing model...")
 
     model = SparseMoEDecoderForCausalLM(model_cfg)
 
-    # ================================
+    # ================================ 
     #       Review Configuration
-    # ================================
+    # ================================ 
 
     # Display architecture
     print(model)
@@ -327,9 +319,9 @@ def main(config_path: str):
     # Display a full parameter breakdown using the shared utility
     summarize_parameters(model)
 
-    # ========================================
+    # ======================================== 
     #   Format Settings for WandB Run Name
-    # ========================================
+    # ======================================== 
 
     # Format the cfg learning rate as a scientific notation string like 5e-4
     lr_str = '{:.0e}'.format(ptrain_cfg['learning_rate'])
@@ -348,9 +340,9 @@ def main(config_path: str):
         config=full_cfg
     )
 
-    # ===============================
+    # =============================== 
     #       Training Arguments
-    # ===============================
+    # =============================== 
 
     training_args = TrainingArguments(
         output_dir=ptrain_cfg["output_dir"],
@@ -415,9 +407,9 @@ def main(config_path: str):
     print("Training Arguments:")
     print(tabulate.tabulate(vars(training_args).items(), headers=["Argument", "Value"]))
 
-    # ==========================
+    # ========================== 
     #     Perplexity Metric
-    # ==========================
+    # ========================== 
 
     import numpy as np
 
@@ -486,9 +478,9 @@ def main(config_path: str):
     # Instantiate your stateful metric computer
     perplexity_metric = PerplexityMetric()
 
-    # ===============================
+    # =============================== 
     #           Trainer
-    # ===============================
+    # =============================== 
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -504,9 +496,9 @@ def main(config_path: str):
 
     """## Loop"""
 
-    # =====================
+    # ===================== 
     #     Run Training
-    # =====================
+    # ===================== 
 
     # Do inside a try/finally so that if the run aborts, we still call wandb.finish().
     try:
