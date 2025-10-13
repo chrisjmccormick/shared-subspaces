@@ -192,7 +192,7 @@ def main(config_path: str):
         # Skip tokenization and chunking since it's already done
         tokenized = dataset
         
-    elif dataset_name == "wikitext":
+    elif dataset_name in ["wikitext", "yujiepan/wikitext-tiny"]:
         
         # Original logic for wikitext and other datasets
         dataset = load_dataset(dataset_name, dataset_config)
@@ -208,7 +208,7 @@ def main(config_path: str):
     #    Tokenize Wikitext
     # ======================== 
 
-    if dataset_name == "wikitext":
+    if dataset_name in ["wikitext", "yujiepan/wikitext-tiny"]:
 
         block_size = ptrain_cfg["max_seq_length"]
         eos_id = tokenizer.eos_token_id

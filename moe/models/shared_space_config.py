@@ -275,6 +275,9 @@ class SparseMoEDecoderConfig(PretrainedConfig):
         if not 0.0 <= self.expert_dropout_prob <= 1.0:
             raise ValueError("`expert_dropout_prob` must be in [0, 1]")
 
+    # how to pretty-print the SparseMoEDecoderConfig using json.dumps
+    def __str__(self) -> str:
+        return json.dumps(self.to_dict(), indent=4)
 
 def get_config(filename: str):
     """
