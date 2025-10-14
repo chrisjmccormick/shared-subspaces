@@ -192,6 +192,9 @@ class SparseMoEDecoderConfig(PretrainedConfig):
         self.router_noise_std = router_noise_std
         self.expert_dropout_prob = expert_dropout_prob
 
+        # Tell HF not to instantiate a default config during to_diff_dict()
+        self.has_no_defaults_at_init = True
+
         # === Validation ===
         self._validate()
 

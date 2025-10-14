@@ -5,7 +5,7 @@
 
   "model": {
     "hidden_size":          768,
-    "num_hidden_layers":    12,
+    "num_hidden_layers":    6,
     "intermediate_size":    2048,
 
     "vocab_size":               50257,
@@ -64,7 +64,7 @@
     "logging_steps":        50,
     "save_steps":           300,
 
-    "train_batch_size":     64,
+    "train_batch_size":     32,
     "gradient_accumulation_steps": 16,
     "learning_rate":        5e-04,
     "num_train_steps":      3000,
