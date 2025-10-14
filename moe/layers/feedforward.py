@@ -249,7 +249,10 @@ class SparseMoEFeedForward(nn.Module):
         # `moe/sparse_moe.py`.
         capacity = self.config.compute_capacity(tokens)
 
-        updates = torch.zeros_like(flat_hidden)
+        # Create the accumulator with the correct dtype for mixed-precision training.
+        # The expert weights determine the compute dtype (e.g., bfloat16).
+        compute_dtype = self.experts[0].W_in.weight.dtype
+        updates = torch.zeros_like(flat_hidden, dtype=compute_dtype)
 
         for expert_idx, expert in enumerate(self.experts):
             mask = flat_indices == expert_idx
