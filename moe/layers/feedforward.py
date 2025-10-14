@@ -247,7 +247,11 @@ class SparseMoEFeedForward(nn.Module):
         # Compute the maximum number of routed tokens each expert is allowed
         # to process. This mirrors the behavior of the sketch in
         # `moe/sparse_moe.py`.
-        capacity = self.config.compute_capacity(tokens)
+        print("Computing capacity with tokens =", tokens)
+        print("Config: \n", self.config)
+        total_slots = tokens * self.config.router_top_k
+        per_expert = total_slots / max(self.config.num_experts, 1)
+        capacity = max(1, int(per_expert * self.config.capacity_factor))
 
         # Create the accumulator with the correct dtype for mixed-precision training.
         # The expert weights determine the compute dtype (e.g., bfloat16).

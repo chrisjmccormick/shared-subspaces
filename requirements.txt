@@ -10,6 +10,8 @@ deepspeed==0.17.5
 huggingface-hub==0.34.4
 safetensors==0.6.2
 tokenizers==0.22.0
+hf_transfer
+tabulate
 
 # Metrics/evaluation for GLUE-style fine-tuning (commonly used alongside datasets)
 evaluate>=0.4.1
