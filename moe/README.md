@@ -73,3 +73,6 @@
 - `layers/mla.py` is ported verbatim from the subspace decoder with updated imports to the MoE config/utility modules.
 - `models/shared_space_decoder.py` wires MLA attention with the new Sparse MoE feed-forward blocks across the transformer stack.
 - `configs/gpt-2_sparse_moe_wiki103.json` demonstrates how to activate the Sparse MoE path for the GPT-2 MLA baseline.
+
+# Lets run training script
+python -m moe.scripts.train --config moe/configs/gpt-2_sparse_moe_wiki103.json

@@ -4,6 +4,8 @@
 transformers>=4.42,<5
 datasets>=2.19,<3
 torch==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+hf_transfer
+tabulate
 
 # Metrics/evaluation for GLUE-style fine-tuning (commonly used alongside datasets)
 evaluate>=0.4.1

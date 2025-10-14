@@ -275,7 +275,7 @@ class SparseMoEFeedForward(nn.Module):
             gating_scores = flat_probs[token_indices, gate_indices].unsqueeze(-1)
             weighted = expert_out * gating_scores
 
-            updates.index_add_(0, token_indices, weighted)
+            updates.index_add_(0, token_indices, weighted.to(updates.dtype))
 
         if self.training:
             updates = self.dropout(updates)

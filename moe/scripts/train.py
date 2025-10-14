@@ -43,6 +43,9 @@ from ..layers.task_heads import SparseMoEDecoderForCausalLM
 import torch.nn as nn
 from transformers import DeepseekV3ForCausalLM
 
+# import torch._dynamo
+# torch._dynamo.config.suppress_errors = True
+
 def check_bf16_support():
     """Check if BFloat16 is supported on the current hardware and PyTorch version."""
     if not torch.cuda.is_available():
