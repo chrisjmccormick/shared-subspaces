@@ -1,20 +1,25 @@
 # requirements.txt
 
 # Core HF stack used by your training/fine-tuning scripts
-transformers>=4.42,<5
-datasets>=2.19,<3
+transformers==4.56.0
+datasets==4.0.0
 torch==2.4.1 --index-url https://download.pytorch.org/whl/cu121
-hf_transfer
-tabulate
+transformers[torch]
+accelerate==1.10.1
+deepspeed==0.17.5
+huggingface-hub==0.34.4
+safetensors==0.6.2
+tokenizers==0.22.0
 
 # Metrics/evaluation for GLUE-style fine-tuning (commonly used alongside datasets)
 evaluate>=0.4.1
 
 # Logging
-wandb>=0.16
+wandb==0.21.3
 
 # Numerics & general utilities
 numpy>=1.23
-tqdm>=4.66
+tqdm==4.67.1
 scikit-learn>=1.2
+pyarrow==21.0.0
 
