@@ -221,7 +221,7 @@ def main():
     # and then use the provided "validation" set as our test set.
     train_split = int(0.9 * len(ds["train"]))
     train_dataset = Subset(ds["train"], range(train_split))
-    val_dataset = Subset(ds["train"], range(train_split, len(ds["train"]))))
+    val_dataset = Subset(ds["train"], range(train_split, len(ds["train"])))
     test_dataset = ds["validation"]
     
     print(f"\nDataset splits:")

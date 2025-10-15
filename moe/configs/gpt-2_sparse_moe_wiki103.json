@@ -82,9 +82,11 @@
 
     "fp16":                 false,
     "bf16":                 true,
-    "torch_compile":        false,
-    "torch_compile_backend": null,
-    "torch_compile_mode":   null
+    "torch_compile":        true,
+    "torch_compile_backend": "inductor",
+    "torch_compile_mode":   "default",
+
+    "best_checkpoint": "checkpoints/gpt2_sparse_moe_wiki/checkpoint-3000"
   }
 
 }
