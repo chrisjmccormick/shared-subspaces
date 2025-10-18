@@ -7,6 +7,7 @@
     "hidden_size":          768,
     "num_hidden_layers":    6,
     "intermediate_size":    2048,
+    "moe_intermediate_size": 512,
 
     "vocab_size":               50257,
     "tie_word_embeddings":      true,

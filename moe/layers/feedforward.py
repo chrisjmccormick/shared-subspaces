@@ -63,7 +63,7 @@ class ExpertSwiGLU(nn.Module):
         super().__init__()
 
         self.hidden_dim = config.hidden_size
-        self.intermediate_dim = config.intermediate_size
+        self.intermediate_dim = getattr(config, "moe_intermediate_size", config.intermediate_size)
 
         self.is_dense = (not config.ffn_decompose) or (layer_idx < config.num_dense_layers)
 
