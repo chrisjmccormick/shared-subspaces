@@ -86,6 +86,8 @@
     "torch_compile_backend": "inductor",
     "torch_compile_mode":   "default",
 
+    "preprocessed_dataset_path": "data_cache/c4_en_pct0.02_seq1024",
+
     "best_checkpoint": "checkpoints/gpt2_sparse_moe_wiki/checkpoint-3000"
   }
 
