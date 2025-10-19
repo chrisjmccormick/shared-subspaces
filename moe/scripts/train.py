@@ -181,8 +181,8 @@ def main(config_path: str):
     #    Load Dataset
     # ====================== 
     
-    dataset_name = ptrain_cfg["dataset_name"]
-    dataset_config = ptrain_cfg["dataset_config"]
+    dataset_name = ptrain_cfg["dataset_name"] if "dataset_name" in ptrain_cfg else ""
+    dataset_config = ptrain_cfg["dataset_config"] if "dataset_config" in ptrain_cfg else None
     
     # Check if we should load a pre-processed dataset
     if "preprocessed_dataset_path" in ptrain_cfg and ptrain_cfg["preprocessed_dataset_path"]:

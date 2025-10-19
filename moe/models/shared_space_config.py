@@ -104,6 +104,7 @@ class SparseMoEDecoderConfig(PretrainedConfig):
         hidden_size: int = 512,
         num_hidden_layers: int = 12,
         intermediate_size: int = 3072,
+        moe_intermediate_size: Optional[int] = None,
         hidden_dropout_prob: float = 0.1,
         attention_dropout_prob: float = 0.1,
         max_position_embeddings: int = 2048,
@@ -152,6 +153,7 @@ class SparseMoEDecoderConfig(PretrainedConfig):
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
         self.intermediate_size = intermediate_size
+        self.moe_intermediate_size = moe_intermediate_size
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_dropout_prob = attention_dropout_prob
         self.max_position_embeddings = max_position_embeddings

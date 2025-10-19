@@ -1,11 +1,11 @@
 {
 
-  "shorthand": "moe.768.lyr.12 - seqlen.128 - mla.192.128.0 - ah12.64 - k2.e4.c1.25",
+  "shorthand": "moe.768.lyr.8 - seqlen.1024 - mla.192.128.0 - ah12.64 - k2.e4.c1.25",
   "notes": "Sparse MoE variant of the GPT-2 MLA baseline with 4 experts and top-2 routing.",
 
   "model": {
     "hidden_size":          768,
-    "num_hidden_layers":    6,
+    "num_hidden_layers":    8,
     "intermediate_size":    2048,
     "moe_intermediate_size": 512,
 
@@ -21,7 +21,7 @@
 
     "num_attention_heads":  12,
 
-    "q_shared_dim":         192,
+    "q_shared_dim":         null,
     "kv_shared_dim":        null,
     "o_shared_dim":         null,
 
@@ -74,10 +74,6 @@
     "num_workers":          8,
     "pin_memory":           true,
 
-    "dataset_name":         "wikitext",
-    "dataset_config":       "wikitext-103-raw-v1",
-    "dataset_subset_pct":   null,
-
     "max_seq_length":       1024,
     "eval_batch_size":      64,
 
@@ -87,7 +83,7 @@
     "torch_compile_backend": "inductor",
     "torch_compile_mode":   "default",
 
-    "preprocessed_dataset_path": "data_cache/c4_en_pct0.02_seq1024",
+    "preprocessed_dataset_path": "/workspace/shared-subspaces/data_cache/c4_en_pct0.02_seq1024/dataset",
 
     "best_checkpoint": "checkpoints/gpt2_sparse_moe_wiki/checkpoint-3000"
   }

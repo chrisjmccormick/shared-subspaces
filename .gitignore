@@ -225,3 +225,6 @@ miniconda.sh
 
 # Wandb logs
 wandb/
+
+# Remove data_cache
+data_cache/
