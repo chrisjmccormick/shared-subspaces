@@ -53,27 +53,6 @@ from layers.task_heads import SharedSpaceDecoderForCausalLM
 import torch.nn as nn
 from transformers import DeepseekV3ForCausalLM
 
-def check_bf16_support():
-    """Check if BFloat16 is supported on the current hardware and PyTorch version."""
-    if not torch.cuda.is_available():
-        print("Warning: CUDA not available. BFloat16 training requires CUDA.")
-        return False
-    
-    # Check if the GPU supports BFloat16
-    if hasattr(torch.cuda, 'is_bf16_supported') and torch.cuda.is_bf16_supported():
-        print("✓ BFloat16 is supported on this hardware")
-        return True
-    
-    # Fallback check for older PyTorch versions
-    try:
-        # Try to create a small BFloat16 tensor on GPU
-        test_tensor = torch.tensor([1.0], dtype=torch.bfloat16, device='cuda')
-        print("✓ BFloat16 is supported on this hardware")
-        return True
-    except Exception as e:
-        print(f"Warning: BFloat16 not supported on this hardware: {e}")
-        return False
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to JSON config")
