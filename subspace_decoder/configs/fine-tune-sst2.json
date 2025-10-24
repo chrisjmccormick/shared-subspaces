@@ -1,0 +1,37 @@
+{
+    "fine_tune": {
+    "wandb_project": "decoder-finetune-sst2",
+    "task": "sst2",
+    "tokenizer_name_or_path": "gpt2",
+    "method": "lm_label_words",
+    "label_words": {
+      "0": " negative",
+      "1": " positive"
+    },
+    "train_batch_size": 256,
+    "gradient_accumulation_steps": 1,
+    "eval_batch_size": 256,
+    "learning_rate": 5e-05,
+    "weight_decay": 0.05,
+    "max_steps": 1500,
+    "warmup_ratio": 0.1,
+    "eval_steps": 150,
+    "logging_steps": 20,
+    "save_strategy": "no",
+    "save_steps": 500,
+    "save_total_limit": 0,
+    "report_to_wandb": true,
+    "bf16": true,
+    "fp16": false,
+    "torch_compile": false,
+    "torch_compile_backend": null,
+    "torch_compile_mode": null,
+    "lora": {
+      "enabled": false
+    },
+    "seed": 42,
+    "max_seq_length": 128,
+    "output_dir": "",
+    "run_name": ""
+  }
+}

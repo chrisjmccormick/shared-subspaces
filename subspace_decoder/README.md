@@ -1,130 +1,67 @@
-# DeepSeek V3 with MLA-o, Research Prototype
+# Subspace Decoder: Shared and Private Attention Spaces
 
-This repository contains a minimal modification to the DeepSeek V3 attention mechanism, implementing the MLA-o output projection for research and benchmarking purposes.
+## Understanding Attention Head Space Decomposition
 
-## Overview
+This project explores the decomposition of attention head spaces into **"shared"** and **"private"** components, extending the Multi-head Latent Attention (MLA) architecture popularized by models like DeepSeek-V3 and Kimi-K2.
 
-The goal is to evaluate the impact of adding a latent subspace projection to the attention output in the Multihead Latent Attention (MLA) architecture. This is implemented as a minimal modification to the established DeepSeek V3 implementation to ensure credibility and reproducibility.
+### What is a "Subspace"?
 
-## Key Changes
+In our context, a **subspace** refers to a lower-dimensional representation space that multiple attention heads can share. This is mathematically equivalent to what others might call a **"latent space"** — the terminology used in the original MultiheadLatentAttention implementation. 
 
-The modification decomposes the output heads into private and shared subspaces. 
+Think of the attention mechanism as having multiple "rooms" where different heads can work:
+- **Private spaces**: Each attention head has its own dedicated room (traditional multi-head attention)
+- **Shared spaces**: Multiple heads share a common room, forcing them to coordinate and potentially learn more efficiently
 
-### Architecture Details
+### Shared vs. Private Space Decomposition
 
-```python
-# Standard output projection
-attn_output = self.o_proj(attn_output)
-
-# Decomposed output projection (when enabled)
-if self.use_output_subspace:
-    attn_output = self.o_a_proj(attn_output)  # Project to latent space
-    attn_output = self.o_b_proj(attn_output)  # Project back to model space
+#### Traditional Multi-Head Attention (MHA)
+In standard attention, each head operates in its own private space:
+```
+Query_i = W^Q_i × Input    (separate W^Q_i for each head i)
+Key_i   = W^K_i × Input    (separate W^K_i for each head i) 
+Value_i = W^V_i × Input    (separate W^V_i for each head i)
+Output  = W^O × concat(head_1, head_2, ..., head_n)
 ```
 
-## Files
+#### Multi-Head Latent Attention (MLA)
+MLA introduces shared subspaces for queries and keys/values:
+```
+# Shared projections (all heads share these spaces)
+Q_shared = W^Q_shared × Input     (single shared projection)
+KV_shared = W^KV_shared × Input   (single shared projection)
 
-- `layers/deepseek_mla_o.py`: Modified DeepSeek V3 attention class with output subspace projection
-- `models/configuration_deepseek.py`: Extended DeepSeek V3 config with output subspace parameters
-- `example_monkey_patch.py`: Example script showing how to apply the modification
-- `configs/initial_mla.json`: Example training configuration
-- `requirements.txt`: Minimal dependencies for the research prototype
-
-## Usage
-
-### Basic Monkey Patching
-
-```python
-from transformers import AutoModelForCausalLM
-from layers.deepseek_mla_o import DeepseekV3Attention
-from example_monkey_patch import monkey_patch_attention_layers
-
-# Load the base model
-model = AutoModelForCausalLM.from_pretrained("deepseek-ai/deepseek-coder-7b-instruct-v1.5")
-
-# Apply the modification
-modified_model = monkey_patch_attention_layers(
-    model,
-    use_output_subspace=True,
-    o_latent_dim=512  # Dimension of the output latent space
-)
+# Private projections (per-head, but from shared space)
+Query_i = W^Q_private_i × Q_shared
+Key_i   = W^K_private_i × KV_shared
+Value_i = W^V_private_i × KV_shared
 ```
 
-### Configuration Options
-
-The modification is controlled by two config parameters:
-
-- `use_output_subspace`: Boolean flag to enable/disable the change
-- `o_latent_dim`: Dimension of the intermediate latent space
-
-These parameters are properly integrated into the extended `DeepseekV3Config` class with validation.
-
-### Running the Example
-
-```bash
-pip install -r requirements.txt
-python example_monkey_patch.py
+#### MLA with Output Subspace (MLA-O)
+Our extension adds a shared output subspace:
+```
+# After attention computation...
+Output_latent_i = W^O_private_i × AttentionOutput_i  (per-head to shared space)
+Output = W^O_shared × sum(Output_latent_1, ..., Output_latent_n)  (shared to model space)
 ```
 
-## Research Approach
+### Alternative Nomenclature
 
-### Why This Approach?
+Other common naming conventions for this decomposition include:
 
-1. **Minimal Modification**: Only changes the output projection, keeping everything else identical
-2. **Credibility**: Based on established DeepSeek V3 implementation
-3. **Isolation**: Changes are contained and don't affect other model components
-4. **Reproducibility**: Easy for others to verify and reproduce
+- **LoRA-style naming**: `A` and `B` matrices (where A projects down, B projects up)
+- **Down-Up notation**: `D` and `U` matrices (emphasizing the dimensional reduction and expansion)
+- **Bottleneck terminology**: "Compression" and "decompression" matrices
 
-### Dependencies Simplified
+However, we've chosen the **"shared vs. private"** terminology in this project to emphasize the core conceptual difference: whether attention heads operate in isolation (private) or coordinate through common representational spaces (shared).
 
-The implementation removes unnecessary dependencies:
-- ❌ Flash attention (adds complexity)
-- ❌ Unused transformers utilities
-- ❌ Heavy padding/unpadding logic
-- ✅ Core PyTorch and transformers functionality
-- ✅ Essential attention mechanisms
+### Why This Matters
 
-### Weight Initialization
+The shared/private distinction captures something fundamental about how we want attention heads to learn:
 
-When enabling the output subspace, the new projection weights are initialized using Xavier uniform initialization. For research purposes, you might want to experiment with different initialization strategies.
+- **Shared spaces** receive gradients from every token and every head that uses them, potentially enabling faster learning and better generalization
+- **Private spaces** allow heads to specialize without interference, but may learn more slowly and redundantly
+- **The balance** between shared coordination and private specialization may be key to efficient attention mechanisms
 
-## Benchmarking
+---
 
-This prototype is designed for:
-- Small-medium scale pre-training runs
-- Fine-tuning on standard benchmarks
-- Ablation studies comparing MLA vs MLA-o
-- Performance and efficiency analysis
-
-## Limitations
-
-1. **No Flash Attention**: Removed for simplicity, may impact performance on long sequences
-2. **Limited Testing**: This is a research prototype, not production-ready
-3. **Weight Transfer**: The weight copying logic assumes compatible architectures
-
-## Future Work
-
-- Add flash attention support back if needed
-- Implement more sophisticated weight initialization strategies
-- Add comprehensive testing and validation
-- Explore different latent space dimensions and architectures
-
-## Citation
-
-If you use this code in your research, please cite both the original DeepSeek V3 paper and the MLA paper:
-
-```bibtex
-@article{deepseek2024,
-  title={DeepSeek V3: Scaling Up DeepSeek Coder with a Comprehensive Code Dataset},
-  author={...},
-  journal={...},
-  year={2024}
-}
-
-@article{mla2024,
-  title={Multihead Latent Attention: A Novel Attention Mechanism for Transformer Models},
-  author={...},
-  journal={...},
-  year={2024}
-}
-```
+*For more background and discussion of the motivation, see the original blog post [here](https://mccormickml.com/2025/07/28/output-latent-spaces-in-multihead-attention/).*

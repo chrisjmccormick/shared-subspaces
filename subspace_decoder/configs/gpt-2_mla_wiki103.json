@@ -1,0 +1,85 @@
+{
+
+    "shorthand": "model.768.lyr.12 - seqlen.128 - mla.192.128.0 - ah12.64 - rd32.32",
+    "notes": "MLA Baseline configuration trained at GPT-2 scale, with sequence length 128, on wikitext103",
+    
+    "model": {
+        
+      "hidden_size":          768,
+      "num_hidden_layers":    12,
+      "intermediate_size":    2048,
+          
+      "vocab_size":               50257,
+      "tie_word_embeddings":      true,
+      "max_position_embeddings":  128,
+  
+      "norm_type":            "rmsnorm",
+      "layer_norm_eps":       1e-12,
+      "rms_norm_eps":         1e-6,
+  
+      "num_dense_layers":     0,	
+  
+      "num_attention_heads":  12,
+  
+      "q_shared_dim":         192,	
+      "kv_shared_dim":        128,
+      "o_shared_dim":         null,    
+      
+      "qk_private_dim":       64,
+      "vo_private_dim":       64,
+  
+      "rope_dims":            32,
+      "nope_dims":            32,
+  
+      "rope_theta":           10000.0,
+      "rope_scaling":         null,
+  
+      "attention_bias":       false,	
+      
+      "attention_backend":    "flash_attention_2",
+  
+      "ffn_decompose":     false,
+      "ffn_rank":          null,
+      
+      "vocab_subspace":    false,
+      "vocab_rank":        null,
+  
+  
+      "hidden_dropout_prob":     0.1,
+      "attention_dropout_prob":  0.1,
+      "classifier_dropout":      null,
+      "initializer_range":       0.02
+    },
+    
+    "pre_train": {
+      "wandb_project":        "decoder-pretrain-wiki",
+      "output_dir":           "checkpoints/gpt2_mla_wiki_baseline",
+      "seed":                 42,
+      "logging_steps":        50,
+      "save_steps":           300,
+  
+      "train_batch_size":     64,
+      "gradient_accumulation_steps": 16,
+      "learning_rate":        5e-04,
+      "num_train_steps":      12500,
+      "eval_steps":           1000,
+      "weight_decay":         0.01,
+      "num_workers":          8,
+      "pin_memory":           true,
+  
+      "dataset_name":         "wikitext",
+      "dataset_config":       "wikitext-103-raw-v1",
+      "dataset_subset_pct":   null,
+      
+      "max_seq_length":       128,
+      "eval_batch_size":      64,
+      
+      "fp16":                 false,
+      "bf16":                 true,
+      "torch_compile":        true,
+      "torch_compile_backend": "inductor",
+      "torch_compile_mode":   "default"
+    }
+  
+  }
+  
