@@ -4,6 +4,19 @@ This directory contains a decoder-only transformer model that uses a Mixture of 
 
 The primary difference is in the feed-forward network (FFN) block. While the `subspace_decoder` uses a standard dense FFN, this model implements a `SparseMoEFeedForward` layer. This layer uses a `NoisyTopKRouter` to dynamically route each token to a small subset of expert networks. This allows for a much larger number of parameters in the model, while keeping the computational cost for each token constant, as only a fraction of the experts are used for each input.
 
+## Experiment
+This work attempts to explore the effect of intra-block subspaces(query, key-value and output subspaces) on MoE model. 
+
+Here are the results:
+>NOTE: mla1-2-3 where 1 = query_shared_dim, 2 = keyvalue_shared_dim and 3 = output_shared_dim
+
+| Model  | Perplexity | Params (M) | Training Time |
+|---------|-------------|------------|----------------|
+| mla192-0-0   | 45.28       | 97.67      | 2h 49 min      |
+| mla0-0-192    | 44.53       | 97.67      | 2h 50 min      |
+| mla0-128-0  | 47.83       | 93.16      | 2h 46 min      |
+| MHA     | 44.51       | 99.91      | 2h 49 min      |
+
 # To run training script
 ```
 python -m moe.scripts.train --config moe/configs/gpt-2_sparse_moe_wiki103.json
