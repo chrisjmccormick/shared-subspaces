@@ -67,10 +67,7 @@
     "torch_compile_backend": "inductor",
     "torch_compile_mode":   "default",
 
-    "enable_packing":       true,
-
-    "best_checkpoint":    "/workspace/shared-subspaces/checkpoints/moe-mha/checkpoint-3000",
-    "hub_model_id": "kokolamba/moe-mha"
+    "enable_packing":       true
   },
   
   "fine_tune": {
