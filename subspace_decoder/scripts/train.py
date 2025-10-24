@@ -390,7 +390,6 @@ def main(config_path: str):
         # Evaluate every 2,000 steps
         # Note: Recent versions of Trainer changed the name from 
         # `evaluation_strategy` to `eval_strategy`.
-        batch_eval_metrics = True, # To avoid OOM
         eval_strategy="steps",
         eval_steps=ptrain_cfg["eval_steps"],
         eval_accumulation_steps=4,  # Process eval in smaller chunks to save memory
