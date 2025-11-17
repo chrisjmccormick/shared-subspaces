@@ -1,0 +1,82 @@
+{
+  "description": "Tiny-scale LinkSpace model, KV shared, In/Gate shared",
+  "shorthand": "tiny-scale_link_baseline",
+  "model": {
+      "vocab_size": 50257,
+      "hidden_size": 256,
+      "num_hidden_layers": 8,
+      "intermediate_size": 528,
+      "num_attention_heads": 9,
+      "hidden_dropout_prob": 0.1,
+      "attention_dropout_prob": 0.1,
+      "max_position_embeddings": 1024,
+      "initializer_range": 0.02,
+      "rms_norm_eps": 1e-6,
+      "classifier_dropout": null,
+      "vocab_subspace": false,
+      "vocab_rank": null,
+      "tie_word_embeddings": true,
+
+      "dense_attn_heads": 9,
+      "dense_intrmd_size": 672,
+  
+      "interleave_dense": "dssdssdssd",
+
+      "shrd_attn_heads": 3,
+      "shrd_intrmd_size": 256,
+    
+      "spaces": {
+          "0": {
+          "size": -1,
+          "modules": ["Q", "O", "out"]
+          },
+          "kv": {
+          "modules": ["K", "V"],
+          "size": 96
+          },
+          "ingt": {
+          "size": 128,
+          "modules": ["in", "gate"]
+          }
+      },
+
+      "rope_dims": 16,
+      "qk_private_dim": 32,
+      "vo_private_dim": 32,
+      "nope_dims": 16,
+      "attention_backend": "sdpa",
+      "rope_theta": 10000.0,
+      "rope_scaling": null,
+      "attention_bias": false,
+      "num_dense_layers": 0
+    },
+    "pre_train": {
+        "wandb_project":        "linkdecoder-pretrain-wiki",
+        "output_dir":           "checkpoints/link_base_wiki",
+        "seed":                 42,
+        "logging_steps":        50,
+        "save_steps":           300,
+    
+        "train_batch_size":     32,
+        "gradient_accumulation_steps": 4,
+        "learning_rate":        5e-04,
+        "num_train_steps":      3300,
+        "eval_steps":           300,
+        "weight_decay":         0.01,
+        "num_workers":          8,
+        "pin_memory":           true,
+    
+        "dataset_name":         "wikitext",
+        "dataset_config":       "wikitext-103-raw-v1",
+        "dataset_subset_pct":   null,
+        
+        "max_seq_length":       1024,
+        "eval_batch_size":      32,
+        
+        "fp16":                 false,
+        "bf16":                 true,
+        "torch_compile":        true,
+        "torch_compile_backend": "inductor",
+        "torch_compile_mode":   "default"
+      }
+  }
