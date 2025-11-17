@@ -1,74 +1,127 @@
 # shared-subspaces
 
-This repository contains research code exploring the use of shared subspaces in Transformer attention and feed-forward networks. The core of this work investigates the impact of adding a shared *output* latent space to Multihead Latent Attention (MLA), a parameter-efficient attention mechanism used in models like DeepSeek and Kimi.
+This repository documents a completed research project exploring the use of shared subspaces in Transformer attention and feed-forward networks. The core investigation examines the impact of adding a shared *output* latent space to Multihead Latent Attention (MLA), a parameter-efficient attention mechanism used in models like DeepSeek and Kimi-K2.
 
-The projects here include Singular Value Decomposition (SVD) analysis of pre-trained models to motivate the research, as well as experiments with custom, latent-space-efficient Transformer variants.
+## Project Overview
 
-## The Research Question: Constraining the Residual Stream
+State-of-the-art Multihead Latent Attention (MLA) models like DeepSeek-V3 aggressively bottleneck the inputs to the attention layer, projecting the model's hidden dimension (e.g., 7,168) down to much smaller latent spaces for the query (e.g., 1,536) and key/value pairs (e.g., 512).
 
-State-of-the-art Multihead Latent Attention (MLA) models like DeepSeek-V3 aggressively bottleneck the inputs to the attention layer. For instance, they project the model's hidden dimension (e.g., 7,168) down to much smaller latent spaces for the query (e.g., 1,536) and key/value pairs (e.g., 512).
+This project investigated a key question: **If these input bottlenecks are effective, what is the impact of adding a similar bottleneck to the *output* of the attention layer?**
 
-This raises a key question: **If these input bottlenecks are effective, what is the impact of adding a similar bottleneck to the *output* of the attention layer?**
-
-Using the language of mechanistic interpretability, we can think of a token's vector representation as a "residual stream"—a communication bus that all model components read from and write to. In this framing, MLA's input projections constrain how much information each head can *read* from the stream. This project explores constraining where they can *write* to.
-
+Using the language of mechanistic interpretability, we can think of a token's vector representation as a "residual stream"—a communication bus that all model components read from and write to. In this framing, MLA's input projections constrain how much information each head can *read* from the stream. This project explored constraining where they can *write* to.
 
 <img src='https://lh3.googleusercontent.com/d/1Hh95gVcbyyWpn-vNo6Mx4equVBdjjLcZ' alt='Simple block diagram of the attention heads with shared spaces illustrated as trapezoids' width='800' />
 
-_The trapezoids in this illustration represent projections shared by all heads in a layer. Multihead Latent Attention defines a shared Key-Value latent projection (bottom) and a larger, shared Query latent projection (top). We're proposing a shared Output latent projection (right)._
-<font size="-.5"><center></center></font>
+_The trapezoids in this illustration represent projections shared by all heads in a layer. Multihead Latent Attention defines a shared Key-Value latent projection (bottom) and a larger, shared Query latent projection (top). We explored adding a shared Output latent projection (right)._
 
+## Key Findings
 
-A shared output subspace, where the output matrix $W^O$ is decomposed into a per-head projection $W^{OA}\_i$ and a shared projection $W^{OB}$, could have competing effects:
+### Main Results
 
-  * **Potential Benefits:** It could encourage shared learning and feature reuse, as the shared projection receives gradient updates from every token.
-  * **Potential Risks:** It could reduce head diversity or lead to destructive interference as heads compete for representation capacity in a smaller space.
+**The most interesting finding was that constraining the output space has a similar impact to constraining the query space.** It is indeed possible to add an output latent space to MLA—it's not inherently or catastrophically harmful to the model, and we generally saw similar outcomes when adding a subspace to either the query OR output. 
 
-This repository documents the investigation into whether, under the right conditions, an output latent space can be beneficial.
+**At small model scales, the addition of shared subspaces to the attention block did not result in a more accurate model.** In fact, across all of our various configurations, no decomposed attention layer outperformed the baseline dense Multi-Head Attention (MHA).
 
-## Projects
+### Context and Expectations
 
-This repository is organized into two main projects that follow the research narrative.
+Part of the original premise for this project was based on DeepSeek's claim that MLA is inherently better than standard multi-head attention. In comparison to Group Query Attention (GQA) and Multi-Query Attention (MQA), which sacrifice some accuracy in exchange for cache efficiency, DeepSeek claimed that MLA actually performs better. Based on this, we hypothesized that:
+
+1. Substituting MLA for MHA should result in a more performant model (both speed and accuracy)
+2. Adding an output subspace might provide further improvement over standard MHA
+
+### What We Actually Found
+
+**At small model scales:**
+- Any speed improvement from the reduction in FLOPs was not noticeable
+- Any kind of subspace constraint on the attention layer was harmful to accuracy
+- No decomposed attention configuration outperformed the baseline dense MHA
+
+**At larger scales (124M parameters, GPT-2 scale):**
+- We did begin to see small speed improvements from the decompositions
+
+### Interpretation
+
+Our conclusion is that DeepSeek's claims about MLA superiority must be more true at particular model scales and with the right constraints. Several factors may explain our different results:
+
+- **Scale dependency**: The benefits of latent attention may only emerge at larger model sizes
+- **Non-isoparametric experiments**: Our experiments were not isoparametric, meaning the MLA variants had fewer parameters than the MHA baseline, potentially putting them at a disadvantage in terms of capacity
+- **Optimization and training**: The specific training dynamics and hyperparameters may need to be optimized differently for latent attention mechanisms at smaller scales
+
+## What We Built
+
+One of the most valuable outcomes of this project was the creation of **a comprehensive framework for testing small-scale Transformer architectures** using the HuggingFace ecosystem, with particular focus on testing shared subspace configurations.
+
+### Core Model Implementations
+
+We built both **decoder and encoder models** with modern architectural improvements. In contrast to the original BERT and GPT-2 architectures, we modernized our implementations with:
+
+- **RoPE (Rotary Position Embeddings)** with configurable dimensions
+- **SwiGLU activation functions** for MLP layers
+- **RMSNorm** for layer normalization
+- **Flash Attention** for efficient attention computation
+
+### Flexible Subspace Configuration
+
+We implemented the ability to configure subspaces not only on the attention layer but also:
+- **MLP layers** 
+- **Vocabulary embeddings**
+
+The implementations are in HuggingFace-compatible format with configuration classes that allow detailed specification of subspace dimensions across all model components.
+
+### Experimentation Infrastructure
+
+The project includes a complete training and evaluation pipeline:
+
+- **Pre-training scripts** for language modeling
+- **Fine-tuning scripts** for evaluation on SST-2 sentiment classification
+- **Dataset pre-processing and sharding code** for 1% and 2% samples of the C4 dataset
+- **Google Colab notebooks** for running experiments at low cost on cloud GPUs (by cloning the repo and running scripts from within the notebook)
+
+### Integration with ML Tools
+
+We integrated the framework with modern ML tooling:
+
+- **Weights & Biases** for thorough experiment tracking and metrics visualization
+- **lm-eval** for standardized language model evaluation
+- **Flash Attention** for efficient training
+
+### Documentation
+
+The project journey, including many insights and struggles along the way, is captured in the `journals/` folder, providing a detailed record of the research process.
+
+## Project Components
+
+This repository is organized into three main components that follow the research narrative:
 
 ### 1. `fused_attn_svd/`
 
-Before building new models, we first analyzed existing ones. This project performs a Singular Value Decomposition (SVD) analysis on the attention weight matrices of large, pre-trained MLA models (DeepSeek-V3, Kimi-K2) to measure their "effective rank." The primary goal was to see if the output heads already exhibit a low-rank structure that would suggest a shared subspace is feasible.
+Before building new models, we first analyzed existing ones. This component performs Singular Value Decomposition (SVD) analysis on the attention weight matrices of large, pre-trained MLA models (DeepSeek-V3, Kimi-K2) to measure their "effective rank." The goal was to determine if the output heads already exhibit a low-rank structure that would suggest a shared subspace is feasible.
 
-The analysis reveals that while there is some potential for rank reduction, especially in the early layers, simply decomposing the weights of a pre-trained model might not be the most effective approach. This motivated pre-training a model with the output subspace constraint from the beginning.
-
-Dive into the analysis in the `fused_attn_svd/README.md`.
+The analysis revealed that while there is some potential for rank reduction, especially in the early layers, simply decomposing the weights of a pre-trained model might not be the most effective approach. This motivated pre-training models with the output subspace constraint from the beginning.
 
 ### 2. `subspace_encoder/`
 
-This project implements a custom Transformer encoder from scratch to experimentally validate the impact of a shared output latent space. We train small (6-layer, 13M parameter) models on WikiText-103 and evaluate them on the SST-2 GLUE task.
+This component implements a custom Transformer encoder from scratch to experimentally validate the impact of a shared output latent space. We trained small (6-layer, 13M parameter) models on WikiText-103 and evaluated them on the SST-2 GLUE task.
 
-The core experiments compare three architectures:
+The experiments compared three architectures:
 
-1.  **MHA**: A standard Multihead Attention baseline.
-2.  **MLA**: Our implementation of Multihead Latent Attention.
-3.  **MLA-o**: Our proposed variant, MLA with a shared output latent space.
-
-Find the implementation, usage, and full experimental details in the `subspace_encoder/README.md`.
+1.  **MHA**: A standard Multihead Attention baseline
+2.  **MLA**: Our implementation of Multihead Latent Attention
+3.  **MLA-o**: Our proposed variant, MLA with a shared output latent space
 
 ### 3. `subspace_decoder/`
 
-Building on the encoder experiments, this project implements and evaluates the shared output latent space using a decoder architecture based on HuggingFace's DeepSeek-V3 implementation. Rather than building a custom model from scratch, this approach patches the existing `DeepseekV3ForCausalLM` to add the output subspace decomposition.
+Building on the encoder experiments, this component implements and evaluates the shared output latent space using a decoder architecture. We built custom decoder implementations and also patched HuggingFace's DeepSeek-V3 implementation to add the output subspace decomposition.
 
-The core experiments compare the same three architectures as the encoder project:
+Models were pre-trained on WikiText-103 and fine-tuned on SST-2, with experiments conducted at different model scales (from 13M to 124M parameters) and at various sequence lengths (128 to 1,024 tokens).
 
-1. **MHA**: Standard Multihead Attention baseline.
-2. **MLA**: Multihead Latent Attention (DeepSeek-V3's approach).
-3. **MLA-o**: MLA with shared output latent space.
+## Experimental Results
 
-Models are pre-trained on WikiText-103 and fine-tuned on SST-2, with experiments conducted at both short (128 tokens) and longer (1,024 tokens) sequence lengths to evaluate the impact of context length on the shared output space.
+We conducted extensive experiments with both encoder and decoder architectures across multiple model scales.
 
-Find the implementation details, experimental results, and usage instructions in the `subspace_decoder/README.md`.
+### Small-Scale Results (13-16M Parameters)
 
-## Current Status & Preliminary Results
-
-We have conducted experiments with both encoder and decoder architectures using 6-layer models with a hidden dimension of 256 and 8 attention heads.
-
-### Encoder Results (SubspaceEncoder)
+**Encoder Results (SubspaceEncoder)**
 
 The table below shows the best-performing encoder configurations evaluated on SST-2 test accuracy:
 
@@ -80,11 +133,7 @@ The table below shows the best-performing encoder configurations evaluated on SS
 | 3 | MLA-o     | 84.63         | 12.48M     | 64           | 32               | 64            | RoPE              | 32             |
 
 
-### Decoder Results (DeepSeek-V3 based)
-
-The decoder experiments, using patched DeepSeek-V3 models, show performance at different sequence lengths:
-
-**SST-2 Accuracy (Sequence Length 1,024)**
+**Decoder Results (Sequence Length 1,024)**
 
 || Attention | Test Accuracy | Parameters | Query Latent | Key-Value Latent | Output Latent | Perplexity (WikiText-103) |
 |:---------:|:-------------:|:----------:|:------------:|------------------|---------------|:-------------------------:|
@@ -93,23 +142,24 @@ The decoder experiments, using patched DeepSeek-V3 models, show performance at d
 
 **Key Observations:**
 
-  * **Encoder vs. Decoder**: The decoder models achieve higher SST-2 accuracy (~87-88%) compared to encoders (~84-86%), likely due to the Mixture of Experts architecture.
-  * **Consistency Across Architectures**: Both encoder and decoder experiments show that MLA-o underperforms standard MLA by 1-2 percentage points while reducing parameter count.
-  * **Scale Effects**: At sequence length 1,024, the performance gap between MLA and MLA-o remains consistent with shorter sequences.
-  * **Throughput**: At current model scales, MLA-o does not yet show the expected throughput improvements, likely requiring larger models or more attention heads to become beneficial.
+  * **Consistency Across Architectures**: Both encoder and decoder experiments show that any form of decomposed attention (MLA or MLA-o) underperforms dense MHA by 1-2 percentage points
+  * **No Speed Benefits**: At these model scales, the reduction in FLOPs from subspace decomposition did not translate to noticeable throughput improvements
+  * **Accuracy Trade-off**: The latent space constraints consistently harmed model accuracy without providing compensating benefits
 
-These results are preliminary. Further exploration is needed to understand the trade-offs and identify scenarios where an output latent space could be advantageous, particularly at larger scales where the computational benefits may become more apparent.
+### Larger-Scale Results (124M Parameters - GPT-2 Scale)
 
-## Future Directions & Collaboration
+At the 124M parameter scale, we began to see the first signs of speed improvements from the decompositions, though accuracy remained a challenge. This suggests that the computational benefits of latent attention may only become apparent at larger model sizes.
 
-This is an active research project, and I welcome feedback, discussion, and collaboration! Some potential next steps include:
+## Potential Future Work
 
-  * **Scaling Experiments:** Test the output subspace at larger model scales with more attention heads and larger hidden dimensions to identify the point where computational benefits become apparent.
-  * **Throughput Analysis:** Systematically benchmark the performance (samples/sec) of an isolated attention layer to find the model/latent sizes where MLA-o becomes more computationally efficient.
-  * **Hyperparameter Sweeps:** Thoroughly explore the impact of different latent space sizes for the query, key-value, and output projections.
-  * **Subspace Alignment:** An interpretability tangent to investigate if the output heads align with other subspaces in the model.
+While this project has concluded, there remain interesting open questions for future research:
 
-If you are interested in these ideas, please feel free to open an issue or a pull request to discuss them further, or join the discussion in the Community Projects channel of the EleutherAI Discord server, [here](https://discord.com/channels/729741769192767510/1403903562706059334).
+  * **Larger-Scale Experiments**: Testing at much larger model scales (billions of parameters) where the computational benefits of latent attention may fully materialize
+  * **Isoparametric Comparisons**: Conducting experiments where all variants have exactly the same parameter count to eliminate capacity as a confounding variable
+  * **Training Optimizations**: Exploring whether specialized training procedures, learning rate schedules, or initialization schemes could make latent attention more effective at smaller scales
+  * **Architectural Variations**: Investigating different decomposition patterns or hybrid approaches that selectively apply subspace constraints
+
+The framework and codebase developed in this project provides a solid foundation for anyone interested in pursuing these directions.
 
 ## Repository Structure
 
@@ -138,20 +188,30 @@ If you are interested in these ideas, please feel free to open an issue or a pul
 └── README.md            # You are here!
 ```
 
-# Getting Started
+## Using This Repository
 
-Welcome to the project!
+This repository can serve as a learning resource and starting point for your own transformer architecture experiments.
 
-A great way to get started is to head to the subspace_encoder and try running the [run_experiments.ipynb](https://github.com/chrisjmccormick/shared-subspaces/blob/main/subspace_encoder/scripts/run_experiments.ipynb) Notebook. You can run it in Google Colab and it will clone this repository for you and kick off a pre-training run of the Encoder. 
+### Exploring the Code
 
-No need to run it to completion (it takes 1.5 hours on an A100), but it will give you a starting point for exploring. You can:
-- Check out your run on wandb to watch the metrics in real time. 
-- Try modifying one or more of the hyperparameters by setting up a new config (see the tool at the end of the Notebook).
+The codebase provides a working example of:
+- Modern transformer implementations (encoder and decoder) with RoPE, SwiGLU, and RMSNorm
+- Flexible subspace decomposition patterns applied to attention, MLP, and embeddings
+- Integration with HuggingFace, Weights & Biases, and lm-eval
+- Training scripts for both pre-training and fine-tuning
 
-If anything's confusing or you run into problems, head to this [issue](https://github.com/chrisjmccormick/shared-subspaces/issues/1) to discuss it, and we'll make sure this process gets smooth.
+### Running Experiments
 
-Next, check out the Issues for ways to contribute. At this early stage, there's still a lot that can be done just by working with an AI to do it, so even if you're a beginner you may be able to lend a hand.
+If you'd like to run experiments yourself:
 
-We'll use Issues to discuss specific work, but if you're a member of the EleutherAI Discord server we have a 'community project' post [here](https://discordapp.com/channels/729741769192767510/1403903562706059334) for more general discussion.
+1. Check out the [run_experiments.ipynb](https://github.com/chrisjmccormick/shared-subspaces/blob/main/subspace_encoder/scripts/run_experiments.ipynb) notebook in `subspace_encoder/` - it can be run in Google Colab and will clone the repository and kick off a pre-training run
+2. Explore the configuration files in `configs/` to understand the hyperparameters
+3. Review the `journals/` folder for insights into the experimental process and findings
 
-Thanks for your interest--looking forward to seeing where this goes!
+### Learning from the Journey
+
+The `journals/` folder contains detailed notes about the research process, including challenges encountered, hypotheses tested, and lessons learned. These may be particularly valuable for understanding what works, what doesn't, and why.
+
+---
+
+This project represents a learning journey into the mechanics of latent attention and the challenges of architectural innovation at small scales. While the specific hypothesis about output subspaces didn't pan out as hoped, the infrastructure built and lessons learned may prove valuable for future research in this space.
