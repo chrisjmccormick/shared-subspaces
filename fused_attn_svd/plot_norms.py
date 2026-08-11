@@ -23,6 +23,7 @@ import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 
 # Categorical palette, fixed slot order (validated for the adjacent pairlist used by
@@ -78,6 +79,15 @@ def style_axes(ax, title: str, xlabel: str, ylabel: str) -> None:
     ax.set_ylabel(ylabel, color=INK_MUTED)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
+    # Layers are integers; matplotlib's default locator invents 0.5 steps on short runs.
+    ax.xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+
+
+def plain_log_ticks(ax) -> None:
+    """Log axis with readable labels -- the default renders '1.00012 x 10^0'."""
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(
+        lambda v, _: f"{v:g}" if v >= 1 else f"{v:.3g}"))
+    ax.yaxis.set_minor_formatter(mticker.NullFormatter())
 
 
 def series(rows: dict, matrix: str, field: str) -> tuple[list[int], list[float]]:
@@ -86,27 +96,79 @@ def series(rows: dict, matrix: str, field: str) -> tuple[list[int], list[float]]
     return [p[0] for p in pts], [p[1] for p in pts]
 
 
+def label_ends(ax, items: list[tuple[float, str, str]], min_gap: float = 0.045) -> None:
+    """Direct-label series at the right edge, pushed apart so they stay readable.
+
+    The validator WARNs that aqua/yellow/magenta fall below 3:1 on the light surface,
+    and that warning is not dismissable -- identity for those series must not rest on
+    the swatch alone. `items` is [(y_data, text, color)]; call AFTER limits are final.
+
+    Positions are solved in axes fraction: sort by y, then sweep upward enforcing a
+    minimum gap, then sweep down from the top so the stack stays inside the axes.
+    """
+    if not items:
+        return
+    lo, hi = ax.get_ylim()
+    log = ax.get_yscale() == "log"
+
+    def to_frac(y: float) -> float:
+        if log:
+            return (math.log10(y) - math.log10(lo)) / (math.log10(hi) - math.log10(lo))
+        return (y - lo) / (hi - lo)
+
+    placed = sorted(((to_frac(y), t, c) for y, t, c in items), key=lambda z: z[0])
+    ys = [p[0] for p in placed]
+    for i in range(1, len(ys)):                       # push up
+        ys[i] = max(ys[i], ys[i - 1] + min_gap)
+    overflow = ys[-1] - 1.0
+    if overflow > 0:                                  # pull the stack back inside
+        ys = [y - overflow for y in ys]
+        for i in range(len(ys) - 2, -1, -1):
+            ys[i] = min(ys[i], ys[i + 1] - min_gap)
+
+    for y_frac, (_, text, color) in zip(ys, placed):
+        ax.annotate(text, xy=(1.01, y_frac), xycoords="axes fraction",
+                    fontsize=7.5, color=color, va="center", ha="left",
+                    annotation_clip=False)
+
+
 def fig1(data: dict, out: Path) -> None:
     """Aggregate RMS relative to 0.5/sqrt(d), both models, shared log y."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.2), sharey=True)
-    for ax, (model, (rows, _), title) in zip(axes, [
-        ("glimmer", data["glimmer"], "Muse Glimmer 30B"),
-        ("qwen3-8b", data["qwen3-8b"], "Qwen3-8B"),
-    ]):
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.2), sharey=True)
+    spreads = {}
+    for ax, (model, title) in zip(axes, [("glimmer", "Muse Glimmer 30B"),
+                                         ("qwen3-8b", "Qwen3-8B")]):
+        rows, _ = data[model]
+        ends, allv = [], []
         for matrix in COLOR:
             xs, ys = series(rows, matrix, "ratio_to_target")
             if not xs:
                 continue
             ax.plot(xs, ys, lw=2.0, color=COLOR[matrix], label=LABEL[matrix],
                     solid_capstyle="round")
+            ends.append((ys[-1], LABEL[matrix], COLOR[matrix]))
+            allv.extend(ys)
+        spreads[model] = (min(allv), max(allv))
         ax.axhline(1.0, color=INK_MUTED, lw=1.0, ls="--", zorder=1)
         ax.set_yscale("log")
         style_axes(ax, title, "layer", "")
+        plain_log_ticks(ax)
+        # Glimmer's eight series lie on top of each other, so end labels would be a
+        # pile of overlapping text claiming a distinction the data does not have.
+        # Say that instead; label directly only where the series actually separate.
+        if max(allv) / min(allv) < 1.01:
+            ax.annotate(f"all 8 matrix types coincide\n"
+                        f"(spread {100*(max(allv)/min(allv)-1):.3f}% across "
+                        f"{len(allv)} matrices)",
+                        xy=(0.5, 0.75), xycoords="axes fraction", ha="center",
+                        fontsize=8.5, color=INK_MUTED)
+        else:
+            label_ends(ax, ends)
     axes[0].set_ylabel(r"weight RMS $\div\ 0.5/\sqrt{d_{model}}$", color=INK_MUTED)
-    axes[0].annotate("target = 1.0", xy=(0.02, 1.0), xycoords=("axes fraction", "data"),
-                     xytext=(0, -12), textcoords="offset points",
+    axes[1].annotate("target = 1.0", xy=(0.99, 1.0), xycoords=("axes fraction", "data"),
+                     xytext=(0, 5), textcoords="offset points", ha="right",
                      fontsize=8, color=INK_MUTED)
-    axes[1].legend(frameon=False, fontsize=8, ncol=2, loc="upper right")
+    axes[0].legend(frameon=False, fontsize=7.5, ncol=2, loc="upper left")
     fig.suptitle("Per-matrix weight RMS is pinned to $0.5/\\sqrt{d}$ in Glimmer, "
                  "free in Qwen3-8B", x=0.5, y=1.0, fontsize=11)
     fig.tight_layout()
@@ -116,21 +178,24 @@ def fig1(data: dict, out: Path) -> None:
 
 def fig2(data: dict, out: Path) -> None:
     """Per-head RMS max/min -- what the aggregate cannot see."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.2), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.2), sharey=True)
     for ax, (model, title) in zip(axes, [("glimmer", "Muse Glimmer 30B"),
                                          ("qwen3-8b", "Qwen3-8B")]):
         rows, _ = data[model]
+        ends = []
         for matrix in HEAD_MATS:
             xs, ys = series(rows, matrix, "head_max_over_min")
             if not xs:
                 continue
             ax.plot(xs, ys, lw=2.0, color=COLOR[matrix], label=LABEL[matrix],
                     solid_capstyle="round")
+            ends.append((ys[-1], LABEL[matrix], COLOR[matrix]))
         ax.axhline(1.0, color=INK_MUTED, lw=1.0, ls="--", zorder=1)
         style_axes(ax, title, "layer", "")
+        label_ends(ax, ends)
     axes[0].set_ylabel("per-head RMS  max / min", color=INK_MUTED)
     axes[0].annotate("1.0 = every head identical", xy=(0.02, 1.0),
-                     xycoords=("axes fraction", "data"), xytext=(0, -12),
+                     xycoords=("axes fraction", "data"), xytext=(0, 5),
                      textcoords="offset points", fontsize=8, color=INK_MUTED)
     axes[0].legend(frameon=False, fontsize=8, loc="upper left")
     fig.suptitle("The pinned statistic does not hold per head — and the spread grows "
