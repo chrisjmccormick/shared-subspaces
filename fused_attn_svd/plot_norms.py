@@ -1,15 +1,21 @@
 """Plots for the weight-RMS survey.
 
-Reads the CSV/NPZ written by norm_survey.py and produces three figures:
+Reads the CSV/NPZ written by norm_survey.py and produces four figures:
 
-  fig1_rms_pinned.png       per-matrix RMS / (0.5/sqrt(d)) vs layer, Glimmer | Qwen3-8B.
-                            Shared log y-axis, so the two models are directly comparable:
-                            Glimmer collapses onto 1.0, Qwen3 scatters over 2-4.
-  fig2_per_head_spread.png  per-head RMS max/min within each matrix, vs layer. This is the
-                            thing the aggregate statistic is structurally blind to
-                            (RMS(W)^2 is exactly the mean of the per-head RMS^2).
-  fig3_gate_head_band.png   full per-head RMS spread for the widest-spread matrix, as a
-                            min-max band + median vs layer.
+  fig1_rms_pinned.png          per-matrix RMS / (0.5/sqrt(d)) vs layer, Glimmer | Qwen3-8B.
+                               Shared linear y-axis (range is only 1-4.3), so the two
+                               models are directly comparable.
+  fig2a_query_head_spread.png  per-head RMS max/min for q/o/gate_proj -- one matrix-head
+                               per QUERY head, 32 in both models.
+  fig2b_kv_head_spread.png     the same for k/v_proj -- one per KV head, 2 in Glimmer and
+                               8 in Qwen3. Split from 2a because with 2 heads max/min is
+                               one head divided by the other, not a spread over a
+                               population, and the two models have different head counts.
+  fig3_gate_head_band.png      full per-head RMS spread for the widest-spread matrix, as a
+                               min-max band + median vs layer.
+
+Together 2a/2b show what the aggregate statistic is structurally blind to: RMS(W)^2 is
+exactly the mean of the per-head RMS^2, so a pinned matrix RMS constrains none of this.
 
 Usage:
     python plot_norms.py --results-dir results --out-dir .
@@ -45,6 +51,10 @@ LABEL = {k: k.replace("self_attn.", "attn ").replace("mlp.", "mlp ").replace("_p
          for k in COLOR}
 HEAD_MATS = ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
              "self_attn.o_proj", "self_attn.gate_proj"]
+# One matrix-head per QUERY head (32 in both models) vs one per KV head (2 in Glimmer,
+# 8 in Qwen3). Keep them on separate figures -- see fig2's docstring.
+QUERY_MATS = ["self_attn.q_proj", "self_attn.o_proj", "self_attn.gate_proj"]
+KV_MATS = ["self_attn.k_proj", "self_attn.v_proj"]
 
 INK = "#1a1a19"
 INK_MUTED = "#6b6a66"
@@ -176,23 +186,46 @@ def fig1(data: dict, out: Path) -> None:
     plt.close(fig)
 
 
-def fig2(data: dict, out: Path) -> None:
-    """Per-head RMS max/min -- what the aggregate cannot see."""
+def head_count(heads: dict, matrix: str) -> int | None:
+    """Number of heads the stored arrays actually have, for this matrix."""
+    for key, arr in heads.items():
+        if key.endswith(f"|{matrix}|head"):
+            return int(arr.shape[0])
+    return None
+
+
+def fig2(data: dict, out: Path, matrices: list[str], fname: str, subtitle: str,
+         note: str | None = None) -> None:
+    """Per-head RMS max/min for one family of matrices.
+
+    Query-side (q/o/gate, 32 heads) and KV-side (k/v) live on separate figures: with
+    only 2 KV heads in Glimmer, max/min is literally one head divided by the other, not
+    a spread over a population, so plotting it beside a 32-head statistic invites a
+    comparison that is not there. Qwen3-8B has 8 KV heads, so the two models are not
+    even comparable on that axis -- hence the head count in every panel title.
+    """
     fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.2), sharey=True)
     for ax, (model, title) in zip(axes, [("glimmer", "Muse Glimmer 30B"),
                                          ("qwen3-8b", "Qwen3-8B")]):
-        rows, _ = data[model]
-        ends = []
-        for matrix in HEAD_MATS:
+        rows, heads = data[model]
+        ends, counts = [], set()
+        for matrix in matrices:
             xs, ys = series(rows, matrix, "head_max_over_min")
             if not xs:
                 continue
             ax.plot(xs, ys, lw=2.0, color=COLOR[matrix], label=LABEL[matrix],
                     solid_capstyle="round")
             ends.append((ys[-1], LABEL[matrix], COLOR[matrix]))
+            n = head_count(heads, matrix)
+            if n:
+                counts.add(n)
+        suffix = f"  ({'/'.join(str(c) for c in sorted(counts))} heads)" if counts else ""
         ax.axhline(1.0, color=INK_MUTED, lw=1.0, ls="--", zorder=1)
-        style_axes(ax, title, "layer", "")
+        style_axes(ax, title + suffix, "layer", "")
         label_ends(ax, ends)
+        if note and counts == {2}:
+            ax.annotate(note, xy=(0.5, 0.94), xycoords="axes fraction", ha="center",
+                        fontsize=8, color=INK_MUTED)
     axes[0].set_ylabel("per-head RMS  max / min", color=INK_MUTED)
     for ax in axes:
         ax.set_ylim(bottom=0.90)
@@ -200,10 +233,9 @@ def fig2(data: dict, out: Path) -> None:
                      xycoords=("axes fraction", "data"), xytext=(0, -13),
                      textcoords="offset points", fontsize=8, color=INK_MUTED)
     axes[0].legend(frameon=False, fontsize=8, loc="upper left")
-    fig.suptitle("Spread of per-head weight RMS within each attention matrix, by layer",
-                 x=0.5, y=1.0, fontsize=11)
+    fig.suptitle(subtitle, x=0.5, y=1.0, fontsize=11)
     fig.tight_layout()
-    fig.savefig(out / "fig2_per_head_spread.png", bbox_inches="tight")
+    fig.savefig(out / fname, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -260,9 +292,13 @@ def main() -> None:
             raise SystemExit(f"missing results for {model}: {e}")
 
     fig1(data, od)
-    fig2(data, od)
+    fig2(data, od, QUERY_MATS, "fig2a_query_head_spread.png",
+         "Spread of per-head weight RMS, matrices with one head per QUERY head, by layer")
+    fig2(data, od, KV_MATS, "fig2b_kv_head_spread.png",
+         "Spread of per-head weight RMS, matrices with one head per KV head, by layer",
+         note="2 KV heads: this is a single pairwise ratio, not a spread")
     fig3(data, od)
-    print(f"wrote fig1/fig2/fig3 -> {od}")
+    print(f"wrote fig1/fig2a/fig2b/fig3 -> {od}")
 
 
 if __name__ == "__main__":
