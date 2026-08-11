@@ -110,53 +110,76 @@ general **ℓ2-unit-ball constraint on all layers** (@powns_ai).
 
 ### 1.3 Already measured (2026-08-11) — the norm question is settled
 
-`norm_survey.py` (streams weights over the network, zero disk) was run on Glimmer layers
-0, 3, 25, 51 and Qwen3-8B layers 0, 3, 18, 35. Three results, all clean:
+**Full sweep complete:** every layer of both models — 416 Glimmer matrices (52 × 8) and
+252 Qwen3-8B matrices (36 × 7). Raw data in `results/*_norms.csv` (+ `.npz` with per-head
+and per-row arrays, gitignored — regenerate with `norm_survey.py --layers all`). Figures:
+`fig1_rms_pinned.png`, `fig2_per_head_spread.png`, `fig3_gate_head_band.png`.
+
+Three results, all clean:
 
 **(1) The claim is true, and it is a per-matrix RMS target — not spectral, not nGPT.**
-Every Glimmer matrix measured — attention *and* MLP, across five distinct shapes
-(4096×6656, 256×6656, 6656×4096, 19968×6656, 6656×19968) — has weight RMS
-**6.1292e-3**, i.e. **1.0001 ×** $0.5/\sqrt{6656}$. Shape-independent to four significant
-figures, which rules out a spectral condition (that would scale with
-$\sqrt{d_\text{out}/d_\text{in}}$ and split `down_proj` from `q_proj`). Per-**row** norm CV
-is 0.05–0.40, nowhere near zero, which rules out nGPT-style row normalization. This is
-exactly the Hyperball signature: fixed $\lVert W\rVert_F$ per matrix, rows unconstrained.
-(The uniform 1.0001 is almost certainly bf16 rounding bias, not a real offset.)
+All 416 Glimmer matrices — attention *and* MLP, across five distinct shapes (4096×6656,
+256×6656, 6656×4096, 19968×6656, 6656×19968) — sit at weight RMS **6.1292e-3**.
+Ratio to $0.5/\sqrt{6656}$ spans **0.99982 → 1.00024**: a total spread of **0.042% across
+the entire model**. Shape-independence at that precision rules out a spectral condition,
+which would scale with $\sqrt{d_\text{out}/d_\text{in}}$ and split `down_proj` from
+`q_proj` by tens of percent. Per-**row** norm CV is 0.05–0.40, nowhere near zero, which
+rules out nGPT-style row normalization. This is exactly the Hyperball signature: fixed
+$\lVert W\rVert_F$ per matrix, rows unconstrained. (The consistent ~1.0001 centre is
+almost certainly bf16 rounding bias, not a real offset.)
 
-**(2) Qwen3-8B confirms the contrast, and validates the measurement.** Its RMS ranges
-1.75e-2 → 2.94e-2 across matrices — a 1.7× spread, no pinning (ratios to $0.5/\sqrt{d}$
-span 2.24–3.77). The same code reports variation where variation exists.
+**(2) Qwen3-8B confirms the contrast, and validates the measurement.** Its ratio to
+$0.5/\sqrt{d}$ spans **1.877 → 4.264** — a 127% spread, no pinning whatsoever. The same
+code reports variation where variation exists. Its early layers (1–5) show a large
+excursion: `mlp.up`/`mlp.down` dive to ~1.9 while `mlp.gate` spikes to 4.26 at layer 5.
+That early-layer irregularity is the feature Chris recognized as resembling the shape of
+the effective-rank curves.
 
-**(3) Chris's tweet question is answered: NO, the statistic does not hold per head — and
-the deviation grows with depth.** Per-head RMS max/min within a matrix:
+**(3) Chris's tweet question is answered: NO, the statistic does not hold per head.**
+Per-head RMS max/min within a matrix, over all 52 layers:
 
-| layer | q_proj | k_proj | v_proj | **gate_proj** | o_proj |
-|---|---|---|---|---|---|
-| 0  | 1.10 | 1.00 | 1.14 | 1.22 | 1.18 |
-| 3  | 1.10 | 1.00 | 1.15 | 1.40 | 1.15 |
-| 25 | 1.36 | 1.15 | 1.12 | **2.36** | 1.39 |
-| 51 | 1.45 | 1.39 | 1.11 | 1.65 | 1.31 |
+| matrix | median | worst | at layer |
+|---|---|---|---|
+| **attn gate_proj** | **1.73** | **2.69** | 23 |
+| attn q_proj | 1.34 | 1.69 | 43 |
+| attn o_proj | 1.29 | 1.66 | 34 |
+| attn v_proj | 1.09 | 2.01 | 48 |
+| attn k_proj | 1.07 | 1.52 | 44 |
 
-Exactly what §1.1(b) predicts: with whole-matrix scale pinned, cross-head redistribution is
-one of the few remaining free directions, and the model uses it more the deeper you go.
+Exactly what §1.1(b) predicts: with whole-matrix scale pinned, cross-head redistribution
+is one of the few remaining free directions, and the model uses it — heavily.
 
-Two details worth carrying into the rest of the work:
+Three things the full sweep shows that the 4-layer sample did not:
 
-- **`gate_proj` has by far the widest per-head spread** (2.36× at layer 25). That is not
-  where §5.2 predicted the widest spread would be — the prediction was `q_proj`, on the
-  grounds that `qk_norm` makes q/k scale unobservable so nothing downstream constrains it.
-  The gate winning instead is *more* interesting, because per-head gate weight norm controls
-  **sigmoid saturation**: large $\lVert G_i\rVert$ ⇒ a decisive per-token on/off switch,
-  small ⇒ a gate stuck near $\sigma(0) = 0.5$ that barely gates. So the largest head-level
-  differentiation in the whole model sits in the *head-suppression channel*. That is direct
-  support for the §4.3 thesis — Glimmer expresses "turn this head down" through the gate.
-- **`v_proj` stays flat (1.11–1.15) at every depth** while q/gate/o spread out. Consistent
-  with GQA: only 2 V heads, each shared by 16 query heads, so there is far less to
-  differentiate on that side.
+- **`gate_proj` dominates, and the shape is a mid-model hump, not monotonic growth.** It
+  rises from ~1.2 at layer 0 to a peak of **2.69 at layer 23**, then stays elevated
+  (1.6–2.2) through the back half. That is not where §5.2 predicted the widest spread —
+  the prediction was `q_proj`, since `qk_norm` makes q/k scale unobservable so nothing
+  downstream constrains it. The gate winning is *more* interesting: per-head gate weight
+  norm controls **sigmoid saturation** (large $\lVert G_i\rVert$ ⇒ a decisive per-token
+  on/off switch; small ⇒ a gate stuck near $\sigma(0)=0.5$ that barely gates). The largest
+  head-level differentiation in the model sits in the *head-suppression channel* — direct
+  support for the §4.3 thesis.
+- **Correction to the 4-layer reading: `v_proj` does *not* stay flat.** The sample
+  (layers 0/3/25/51, all ≈1.11–1.15) suggested GQA left nothing to differentiate on the
+  V side. Over all layers, v and k are indeed flat (~1.05–1.15) through roughly layer 40 —
+  and then become erratic, v spiking to **2.01 at layer 48** and k to 1.52 at layer 44.
+  Something changes in the last ~10 layers on the KV side specifically. Worth a look; the
+  late layers are also where the original fused-rank work found a second low-rank region.
+- **The constraint holds the centre and lets the spread run** (`fig3`). Glimmer's *median*
+  head RMS for `gate_proj` sits at ~0.0061 — the pinned target — essentially constant
+  across all 52 layers, while the min→max band widens from ±0.001 at layer 0 to ±0.0025
+  from layer 20 on. The Frobenius constraint fixes the mean of the squares; everything
+  about how that budget is distributed across heads is free, and the model spends it.
 
-Remaining on the norm question: run `--layers all` for the full depth profile (it's ~60 GB
-of ranged reads, no disk), and check whether per-head gate norm correlates with fused VO
-rank — that link is the actual payoff.
+Qwen3-8B for comparison has per-head spread of similar *magnitude* (o 1.52 median, v 1.40,
+q 1.30, k 1.23) but **no depth structure** — it is noisy at every layer. So the difference
+is not that Glimmer's heads vary more; it is that Glimmer's variation is *organized by
+depth and concentrated in the gate*.
+
+Remaining on the norm question: whether per-head gate norm predicts fused VO rank. That
+link is the actual payoff, and it is now a join between `results/glimmer_norms.npz` and
+the fused-rank work that has not been done yet.
 
 ---
 

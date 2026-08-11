@@ -150,9 +150,7 @@ def fig1(data: dict, out: Path) -> None:
             allv.extend(ys)
         spreads[model] = (min(allv), max(allv))
         ax.axhline(1.0, color=INK_MUTED, lw=1.0, ls="--", zorder=1)
-        ax.set_yscale("log")
         style_axes(ax, title, "layer", "")
-        plain_log_ticks(ax)
         # Glimmer's eight series lie on top of each other, so end labels would be a
         # pile of overlapping text claiming a distinction the data does not have.
         # Say that instead; label directly only where the series actually separate.
@@ -160,10 +158,12 @@ def fig1(data: dict, out: Path) -> None:
             ax.annotate(f"all 8 matrix types coincide\n"
                         f"(spread {100*(max(allv)/min(allv)-1):.3f}% across "
                         f"{len(allv)} matrices)",
-                        xy=(0.5, 0.75), xycoords="axes fraction", ha="center",
+                        xy=(0.5, 0.42), xycoords="axes fraction", ha="center",
                         fontsize=8.5, color=INK_MUTED)
         else:
             label_ends(ax, ends)
+    top = max(hi for _, hi in spreads.values())
+    axes[0].set_ylim(0.9, top * 1.10)          # shared: set once, after both panels
     axes[0].set_ylabel(r"weight RMS $\div\ 0.5/\sqrt{d_{model}}$", color=INK_MUTED)
     axes[1].annotate("target = 1.0", xy=(0.99, 1.0), xycoords=("axes fraction", "data"),
                      xytext=(0, 5), textcoords="offset points", ha="right",
@@ -194,8 +194,10 @@ def fig2(data: dict, out: Path) -> None:
         style_axes(ax, title, "layer", "")
         label_ends(ax, ends)
     axes[0].set_ylabel("per-head RMS  max / min", color=INK_MUTED)
+    for ax in axes:
+        ax.set_ylim(bottom=0.90)
     axes[0].annotate("1.0 = every head identical", xy=(0.02, 1.0),
-                     xycoords=("axes fraction", "data"), xytext=(0, 5),
+                     xycoords=("axes fraction", "data"), xytext=(0, -13),
                      textcoords="offset points", fontsize=8, color=INK_MUTED)
     axes[0].legend(frameon=False, fontsize=8, loc="upper left")
     fig.suptitle("The pinned statistic does not hold per head — and the spread grows "
@@ -232,7 +234,8 @@ def fig3(data: dict, out: Path) -> None:
         ax.plot(layers, med, lw=2.0, color=c, label=f"{LABEL[best]} — median head")
         ax.plot(layers, lo, lw=1.0, color=c, alpha=0.55)
         ax.plot(layers, hi, lw=1.0, color=c, alpha=0.55)
-        style_axes(ax, f"{title} — {LABEL[best]}", "layer", "per-head weight RMS")
+        style_axes(ax, f"{title} — {LABEL[best]}  (median max/min {best_spread:.2f}×)",
+                   "layer", "per-head weight RMS")
         ax.legend(frameon=False, fontsize=8, loc="upper left")
     fig.suptitle("Per-head weight RMS: band spans min→max across heads in the layer",
                  x=0.5, y=1.0, fontsize=11)
