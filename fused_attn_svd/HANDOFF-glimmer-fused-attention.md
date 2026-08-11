@@ -123,10 +123,36 @@ All 416 Glimmer matrices — attention *and* MLP, across five distinct shapes (4
 Ratio to $0.5/\sqrt{6656}$ spans **0.99982 → 1.00024**: a total spread of **0.042% across
 the entire model**. Shape-independence at that precision rules out a spectral condition,
 which would scale with $\sqrt{d_\text{out}/d_\text{in}}$ and split `down_proj` from
-`q_proj` by tens of percent. Per-**row** norm CV is 0.05–0.40, nowhere near zero, which
+`q_proj` by tens of percent. Per-**row** norm CV is 0.057–0.264, nowhere near zero, which
 rules out nGPT-style row normalization. This is exactly the Hyperball signature: fixed
 $\lVert W\rVert_F$ per matrix, rows unconstrained. (The consistent ~1.0001 centre is
 almost certainly bf16 rounding bias, not a real offset.)
+
+> ⚠️ **Read the row-norm number precisely.** `norm_survey.py` computes
+> `W.pow(2).sum(dim=1).sqrt()` on the HF `(out_features, in_features)` weight, so a "row"
+> is **the fan-in read vector for one output unit** — always the input space, which is
+> *not* always $d_\text{model}$:
+>
+> | matrix | shape | row vector lives in |
+> |---|---|---|
+> | q/k/v/gate_proj, mlp.gate/up_proj | (·, 6656) | $d_\text{model}$ ✓ |
+> | `self_attn.o_proj` | (6656, 4096) | head-concat space (4096) |
+> | `mlp.down_proj` | (6656, 19968) | MLP intermediate (19968) |
+>
+> The two exceptions are the matrices that *write into* the residual stream, where
+> $d_\text{model}$ is the **out** dimension — so their $d_\text{model}$-side vectors are
+> the **columns**, which have not been measured. nGPT normalizes along the embedding
+> dimension, so strictly the nGPT test was run on six of eight matrices. The conclusion is
+> unaffected — nGPT would normalize *all* of them, and the six that were measured on the
+> right axis are far from uniform — but do not quote a `row_norm_cv` for `o_proj` or
+> `down_proj` as if it were a $d_\text{model}$ statistic.
+>
+> Column norms are worth capturing for their own sake, not just for completeness:
+> `o_proj`'s columns are indexed by the 4096 head-*channels*, so a column norm is that
+> channel's **write amplitude into the residual stream** — a channel with a near-zero
+> `o_proj` column contributes nothing no matter what the gate does. That is directly
+> relevant to §4.2/§4.3 head suppression. Likewise `down_proj` columns are per-neuron
+> write amplitudes.
 
 **(2) Qwen3-8B confirms the contrast, and validates the measurement.** Its ratio to
 $0.5/\sqrt{d}$ spans **1.877 → 4.264** — a 127% spread, no pinning whatsoever. The same

@@ -157,7 +157,13 @@ def main() -> None:
                 W = ck.get(name, dtype=torch.float32)
 
                 rms = W.pow(2).mean().sqrt().item()
-                # per-row norms: the nGPT discriminator
+                # Per-row norms: the nGPT discriminator. NOTE the axis -- W is HF's
+                # (out_features, in_features), so a "row" is the fan-in read vector for
+                # one output unit. That is d_model for q/k/v/gate_proj and mlp.gate/up,
+                # but NOT for o_proj (4096) or mlp.down_proj (19968): those write into
+                # the residual stream, so their d_model-side vectors are the COLUMNS.
+                # nGPT normalizes along d_model, so this tests six of the eight matrices
+                # on the right axis. See the handoff doc, S1.3.
                 row_norms = W.pow(2).sum(dim=1).sqrt()
                 row_cv = (row_norms.std() / row_norms.mean()).item()
 
