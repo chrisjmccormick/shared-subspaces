@@ -133,6 +133,19 @@ def main() -> None:
     arrays: dict[str, np.ndarray] = {}
     t0 = time.time()
     seen_bytes = 0
+
+    # Flush after every layer, not at the end: a full sweep is ~50 GB of network reads
+    # and the box it runs on may be preemptible. Losing 40 minutes to a dropped pod
+    # because the results only landed on exit would be a self-inflicted wound.
+    def flush() -> None:
+        if args.csv and rows:
+            with open(args.csv, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=list(rows[0]))
+                w.writeheader()
+                w.writerows(rows)
+        if args.npz and arrays:
+            np.savez_compressed(args.npz, **arrays)
+
     ck = RemoteSafetensors(spec["repo"])
     try:
         for L in layers:
@@ -174,18 +187,14 @@ def main() -> None:
             print(f"      [layer {done}/{len(layers)}  {gb:.1f} GiB read  "
                   f"{el/60:.1f} min elapsed  ~{eta/60:.1f} min left]", flush=True)
             print()
+            flush()
     finally:
         ck.close()
+        flush()
 
     if args.csv:
-        with open(args.csv, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows[0]))
-            w.writeheader()
-            w.writerows(rows)
         print(f"wrote {len(rows)} rows -> {args.csv}")
-
     if args.npz:
-        np.savez_compressed(args.npz, **arrays)
         print(f"wrote {len(arrays)} arrays -> {args.npz}")
 
 
