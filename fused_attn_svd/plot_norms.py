@@ -200,8 +200,8 @@ def fig2(data: dict, out: Path) -> None:
                      xycoords=("axes fraction", "data"), xytext=(0, -13),
                      textcoords="offset points", fontsize=8, color=INK_MUTED)
     axes[0].legend(frameon=False, fontsize=8, loc="upper left")
-    fig.suptitle("The pinned statistic does not hold per head — and the spread grows "
-                 "with depth", x=0.5, y=1.0, fontsize=11)
+    fig.suptitle("Spread of per-head weight RMS within each attention matrix, by layer",
+                 x=0.5, y=1.0, fontsize=11)
     fig.tight_layout()
     fig.savefig(out / "fig2_per_head_spread.png", bbox_inches="tight")
     plt.close(fig)
