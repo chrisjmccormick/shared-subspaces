@@ -108,6 +108,56 @@ Two alternative readings of the 6e-3 observation came up in the replies and are 
 ruling out early, since they're cheap to distinguish (§5.3): **nGPT** (@rokuJitsu) and a
 general **ℓ2-unit-ball constraint on all layers** (@powns_ai).
 
+### 1.3 Already measured (2026-08-11) — the norm question is settled
+
+`norm_survey.py` (streams weights over the network, zero disk) was run on Glimmer layers
+0, 3, 25, 51 and Qwen3-8B layers 0, 3, 18, 35. Three results, all clean:
+
+**(1) The claim is true, and it is a per-matrix RMS target — not spectral, not nGPT.**
+Every Glimmer matrix measured — attention *and* MLP, across five distinct shapes
+(4096×6656, 256×6656, 6656×4096, 19968×6656, 6656×19968) — has weight RMS
+**6.1292e-3**, i.e. **1.0001 ×** $0.5/\sqrt{6656}$. Shape-independent to four significant
+figures, which rules out a spectral condition (that would scale with
+$\sqrt{d_\text{out}/d_\text{in}}$ and split `down_proj` from `q_proj`). Per-**row** norm CV
+is 0.05–0.40, nowhere near zero, which rules out nGPT-style row normalization. This is
+exactly the Hyperball signature: fixed $\lVert W\rVert_F$ per matrix, rows unconstrained.
+(The uniform 1.0001 is almost certainly bf16 rounding bias, not a real offset.)
+
+**(2) Qwen3-8B confirms the contrast, and validates the measurement.** Its RMS ranges
+1.75e-2 → 2.94e-2 across matrices — a 1.7× spread, no pinning (ratios to $0.5/\sqrt{d}$
+span 2.24–3.77). The same code reports variation where variation exists.
+
+**(3) Chris's tweet question is answered: NO, the statistic does not hold per head — and
+the deviation grows with depth.** Per-head RMS max/min within a matrix:
+
+| layer | q_proj | k_proj | v_proj | **gate_proj** | o_proj |
+|---|---|---|---|---|---|
+| 0  | 1.10 | 1.00 | 1.14 | 1.22 | 1.18 |
+| 3  | 1.10 | 1.00 | 1.15 | 1.40 | 1.15 |
+| 25 | 1.36 | 1.15 | 1.12 | **2.36** | 1.39 |
+| 51 | 1.45 | 1.39 | 1.11 | 1.65 | 1.31 |
+
+Exactly what §1.1(b) predicts: with whole-matrix scale pinned, cross-head redistribution is
+one of the few remaining free directions, and the model uses it more the deeper you go.
+
+Two details worth carrying into the rest of the work:
+
+- **`gate_proj` has by far the widest per-head spread** (2.36× at layer 25). That is not
+  where §5.2 predicted the widest spread would be — the prediction was `q_proj`, on the
+  grounds that `qk_norm` makes q/k scale unobservable so nothing downstream constrains it.
+  The gate winning instead is *more* interesting, because per-head gate weight norm controls
+  **sigmoid saturation**: large $\lVert G_i\rVert$ ⇒ a decisive per-token on/off switch,
+  small ⇒ a gate stuck near $\sigma(0) = 0.5$ that barely gates. So the largest head-level
+  differentiation in the whole model sits in the *head-suppression channel*. That is direct
+  support for the §4.3 thesis — Glimmer expresses "turn this head down" through the gate.
+- **`v_proj` stays flat (1.11–1.15) at every depth** while q/gate/o spread out. Consistent
+  with GQA: only 2 V heads, each shared by 16 query heads, so there is far less to
+  differentiate on that side.
+
+Remaining on the norm question: run `--layers all` for the full depth profile (it's ~60 GB
+of ranged reads, no disk), and check whether per-head gate norm correlates with fused VO
+rank — that link is the actual payoff.
+
 ---
 
 ## 2. What the prior work established (recap)
@@ -637,11 +687,11 @@ scipy, matplotlib, pandas, accelerate. Nothing compiles; no vLLM, no flash-attn.
 2. **Fused QK on the 13 NoPE layers.** First exact, full-head QK fusion available in any
    model studied here. Given scale-free `qk_norm`, any low rank found there is *necessarily*
    Case-2 misalignment. Clean result either way.
-3. **Is the 6e-3 = $0.5/\sqrt{d}$ claim true, at what granularity, and is it true per head?**
-   Per-matrix RMS across all 52 layers × 5 attention matrices + 3 MLP matrices, the
-   cross-shape discriminator of §5.3, then the per-head decomposition of §5.1. This is the
-   cheapest result in the whole project — it's a pass over the safetensors headers and needs
-   no GPU — and it's the one Chris publicly asked about, so it's worth doing first.
+3. ~~Is the 6e-3 claim true, and is it true per head?~~ **Done — see §1.3.** Confirmed as a
+   shape-independent per-matrix RMS target (Hyperball signature); *not* true per head, with
+   the spread growing with depth and concentrated in `gate_proj`. What remains is the full
+   depth profile (`norm_survey.py --layers all`) and, more importantly, whether per-head
+   gate norm predicts fused VO rank.
 4. **Gate statistics per head.** Mean/spread of $\sigma(x W^G_i)$ on calibration text. Are
    there heads that are simply switched off? Does gate-off correlate with low fused VO rank,
    or has it *replaced* low rank as the suppression mechanism?
