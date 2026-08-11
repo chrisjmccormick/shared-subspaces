@@ -20,15 +20,25 @@ attention matrices — $W^{VO}_i = W^V_i W^O_i$ and $W^{QK}_i = W^Q_i (W^K_i)^\t
 have substantially lower effective rank than either constituent matrix, concentrated in
 early layers. See `Fuse and Rank Reduce - Part 1 - Truncation.md` for the full write-up.
 
-A tweet from @wen_kaiyue (2026-08-10-ish) about the just-released Meta **Muse Glimmer 30B**
-claims:
+Kaiyue Wen (@wen_kaiyue) posted about the just-released Meta **Muse Glimmer 30B**
+(`x.com/wen_kaiyue/status/2086869377442369620`, 2026-08-10):
 
 > "A hidden detail in the recently released Muse Glimmer model: its per-matrix weight RMS
-> norm is pinned almost exactly at ~6e-3!"
+> norm is pinned almost exactly at ~6e-3! If you're curious why fixing weight RMS like this
+> can work, feel free to checkout Hyperball: https://arxiv.org/abs/2606.16899"
+>
+> "Why 6e-3? This is actually just fixing the matrix weight to have RMS $0.5/\sqrt{d}$ with
+> $d = 6656$ being the embedding dimension of the network."
+>
+> "Could this be a coincidence? It is impossible to tell for sure but the Weight RMS
+> distribution for Qwen3 8B is vastly different."
 
-with a comparison plot for Qwen3-8B showing a similar-shaped curve. Chris's read: that curve
-matches the *shape* of his effective-rank-vs-layer findings, and a training recipe that pins
-weight norms could plausibly be what removes the low-rank early-layer pathology.
+The arithmetic checks out exactly: $0.5/\sqrt{6656} = 6.1286\text{e-}3$.
+
+**Note the direction of the Qwen3-8B comparison:** Glimmer's per-matrix RMS is *flat* —
+pinned across layers and matrices. Qwen3-8B's is *not*, and that varying shape is what
+Chris recognized as resembling his effective-rank-by-layer curves. Qwen3-8B is the
+**contrast**, not a second example.
 
 Chris replied to the tweet:
 
@@ -39,12 +49,64 @@ Chris replied to the tweet:
 So there are **two** deliverables in scope: the fused-rank analysis, and the head-level
 norm decomposition.
 
-> ⚠️ **Unverified:** the tweet itself (`x.com/wen_kaiyue/status/2086869377442369620`) could
-> not be fetched — x.com returns HTTP 402 to the fetch tool, and the claim does not appear
-> in any indexed secondary source. The 6e-3 figure and the Qwen3-8B plot are **hearsay as
-> far as this document is concerned**. Re-derive both from weights before building on them.
-> Meta's blog and model card disclose nothing about the training recipe (no optimizer, no
-> weight-norm constraint, no weight decay); there is no tech report.
+> ⚠️ Meta's blog and model card disclose **nothing** about the training recipe — no
+> optimizer, no weight-norm constraint, no weight decay — and there is no tech report.
+> That Glimmer used Hyperball (or Muon at all) is Wen's *inference from the weights*, not a
+> disclosed fact. Treat it as a hypothesis the weights can test, and re-derive the RMS
+> numbers here rather than citing them.
+
+### 1.1 What Hyperball actually does, and why it matters here
+
+**"Fantastic Pretraining Optimizers and Where to Find Them II: Hyperball Optimization"** —
+Kaiyue Wen, Xingyu Dang, Kaifeng Lyu, Tengyu Ma, Percy Liang ([arXiv:2606.16899](https://arxiv.org/abs/2606.16899)).
+
+> Matrix-based optimizers such as Muon can substantially speed up LM pretraining, but their
+> gains over AdamW shrink at scale under standard constant decoupled weight decay. Hyperball
+> is an optimizer *wrapper*: given a base optimizer (Adam or Muon), it **sets the Frobenius
+> norms of weight matrices and of their corresponding updates to fixed constants**. On
+> Qwen3-style models up to 1.2 B, Muon+Hyperball gets a 20–30% token-equivalent speedup over
+> weight-decay baselines, and improves LR transfer across widths and depths. Motivation:
+> training with weight decay leads to an equilibrium weight norm that depends only on the
+> training hyperparameters, and that norm then decides the **angular learning rate** — how
+> fast the *direction* of the weight matrix changes. Hyperball makes that control explicit
+> rather than an emergent side effect.
+
+Two consequences that shape this experiment:
+
+**(a) A Frobenius constraint pins total energy, not its distribution.** It says nothing
+about the *spectrum*. A matrix can sit exactly on the Hyperball and still be badly
+low-rank — all its energy concentrated in 40 of 128 singular directions. So norm-pinning
+does **not** on its own predict "the low-rank pathology goes away." What it *does* block is
+the whole matrix drifting toward zero, i.e. Case-1 suppression executed at the
+matrix level.
+
+**(b) It says nothing about per-head allocation either — which is exactly Chris's point.**
+`q_proj` is one 4096×6656 tensor holding 32 independent heads. A constraint on
+$\lVert W \rVert_F$ leaves the model completely free to move energy *between* heads. If
+anything, once global scale is fixed, redistribution across heads is one of the few
+remaining free directions, so a pinned per-matrix RMS is not merely *compatible* with
+extreme per-head variation — it may actively encourage it. Chris's tweet reply is therefore
+the right question, and §5 is the measurement that answers it.
+
+### 1.2 Four candidate mechanisms, only some of which Glimmer has
+
+Worth keeping distinct, because they make different predictions and the experiment can
+partly separate them:
+
+| Mechanism | Effect on the low-rank pathology | In Glimmer? |
+|---|---|---|
+| **Hyperball / RMS pinning** | Blocks whole-matrix magnitude drift. Does **not** flatten spectra. | Inferred from weights (~6e-3) |
+| **Muon (orthogonalized updates)** | Pushes updates toward flat spectra → directly fights low effective rank. | Unknown; Hyperball wraps it, so plausible |
+| **Scale-free QK-norm** | Makes $W^Q$/$W^K$ magnitude functionally *unobservable* — suppression-by-shrinkage is inexpressible. | **Yes**, confirmed in code (§3.3) |
+| **Attention output gate** | Provides a cheap data-dependent suppression channel, removing the *incentive* to suppress via weights. | **Yes**, confirmed in code (§3.3) |
+
+Note that Muon, not Hyperball, is the mechanism that would actually attack effective rank.
+If Glimmer's spectra look flatter than DeepSeek's, that's evidence about the *optimizer*;
+if only the magnitudes look controlled, that's evidence about the *wrapper*.
+
+Two alternative readings of the 6e-3 observation came up in the replies and are worth
+ruling out early, since they're cheap to distinguish (§5.3): **nGPT** (@rokuJitsu) and a
+general **ℓ2-unit-ball constraint on all layers** (@powns_ai).
 
 ---
 
@@ -398,7 +460,30 @@ Predicted-but-untested: if the recipe genuinely pins RMS per *matrix*, the per-h
 for `q_proj` should be the widest of the five (nothing downstream cares), and `o_proj` /
 `gate_proj` the narrowest.
 
-### 5.3 Baseline / control
+### 5.3 Three hypotheses about the 6e-3, and the statistic that separates them
+
+The claim is that RMS $= 0.5/\sqrt{d_\text{model}}$ — note this depends **only on $d = 6656$**,
+not on the individual matrix's fan-in/fan-out. That already discriminates a lot. Checking
+the same statistic at three granularities separates the live hypotheses cheaply:
+
+| Hypothesis | Prediction |
+|---|---|
+| **Hyperball** — fixed $\lVert W\rVert_F$ per matrix | Whole-matrix RMS constant at $0.5/\sqrt{d}$ **regardless of shape**; per-row and per-head RMS free to vary widely |
+| **nGPT-style** — rows/columns normalized | Per-**row** (or per-column) norms nearly constant; whole-matrix RMS constant only as a consequence |
+| **Spectral-norm condition** (e.g. plain Muon) | RMS varies with shape, roughly $\propto \sqrt{d_\text{out}/d_\text{in}}/\sqrt{\max(d_\text{out},d_\text{in})}$ — **not** a single constant |
+
+The decisive comparison is `mlp.down_proj` (6656 × 19968) against `q_proj` (4096 × 6656):
+wildly different shapes and fan-ins. If both land on 6.13e-3, it's an explicit RMS target.
+If they differ in the direction $\sqrt{d_\text{out}/d_\text{in}}$ predicts, it's spectral.
+(For reference: $1/\sqrt{6656} = 1.23\text{e-}2$; $1/\sqrt{19968} = 7.08\text{e-}3$ — close
+enough to 6e-3 that fan-in-based schemes are *not* excluded by magnitude alone, which is
+exactly why the cross-shape comparison is needed rather than eyeballing one matrix.)
+
+Then the per-head decomposition of §5.1 sits underneath all three: whichever holds at the
+matrix level, the head-level spread is an independent and unconstrained degree of freedom
+(§1.1b).
+
+### 5.4 Baseline / control
 
 **Qwen3-8B** (`Qwen/Qwen3-8B`) is the natural control — it's the model in the tweet's
 comparison plot, it's ~16 GB, and its architecture isolates variables nicely:
@@ -517,6 +602,25 @@ bf16 — **no FP8 dequantization needed** either.
 
 Use `HF_TOKEN` from `env.sh` (sourced in the same command; never echo it).
 
+### The box
+
+A gpu-sniper profile exists: **`fused-attn-svd`** (`gpu-sniper/profiles.yaml` +
+`profiles/fused_attn_svd_setup.sh`). 1×A100_80GB, pure-PyPI uv venv at
+`~/shared-subspaces/.venv` — torch, safetensors, `huggingface_hub[hf_transfer]`, numpy,
+scipy, matplotlib, pandas, accelerate. Nothing compiles; no vLLM, no flash-attn.
+
+- `transformers` is installed **from git main** because Muse Glimmer support is
+  5.15.0.dev0-only and in no release. Its install is best-effort and non-fatal: the SVD path
+  never imports it. It *is* required for the activation-based work (gate statistics, §4.2/§6
+  covariance), so check it landed before planning that phase.
+- Both models are pre-pulled into `$HF_HOME` (`~/hf-cache`), guarded on free disk —
+  the setup log says which ones actually downloaded, so read it rather than assuming.
+- Setup asserts the layer-0 and layer-3 tensor shapes in §3.4 and prints the NoPE layer
+  list and the layer-0 `q_proj` RMS vs. $0.5/\sqrt{d}$. If those asserts printed `PASS`,
+  §3 of this document is confirmed against the actual checkpoint.
+- Deliberately does **not** clone `agent-ops` — Chris scoped this project out of that
+  methodology.
+
 ### Repo
 
 - Branch `glimmer-fused-vo` off `main` in `shared-subspaces`.
@@ -533,12 +637,11 @@ Use `HF_TOKEN` from `env.sh` (sourced in the same command; never echo it).
 2. **Fused QK on the 13 NoPE layers.** First exact, full-head QK fusion available in any
    model studied here. Given scale-free `qk_norm`, any low rank found there is *necessarily*
    Case-2 misalignment. Clean result either way.
-3. **Is the ~6e-3 RMS claim even true, and is it true per head?** Per-matrix RMS across all
-   52 layers × 5 attention matrices (+ 3 MLP), then the per-head decomposition of §5. Check
-   whether the constant is shape-independent — that's what would distinguish an explicit RMS
-   target from a spectral-norm condition, whose value would vary with fan-in/fan-out.
-   (For reference: $1/\sqrt{6656} = 1.23\text{e-}2$, $0.5/\sqrt{6656} = 6.13\text{e-}3$,
-   $1/\sqrt{19968} = 7.08\text{e-}3$. Suggestive, but don't reason backwards from it.)
+3. **Is the 6e-3 = $0.5/\sqrt{d}$ claim true, at what granularity, and is it true per head?**
+   Per-matrix RMS across all 52 layers × 5 attention matrices + 3 MLP matrices, the
+   cross-shape discriminator of §5.3, then the per-head decomposition of §5.1. This is the
+   cheapest result in the whole project — it's a pass over the safetensors headers and needs
+   no GPU — and it's the one Chris publicly asked about, so it's worth doing first.
 4. **Gate statistics per head.** Mean/spread of $\sigma(x W^G_i)$ on calibration text. Are
    there heads that are simply switched off? Does gate-off correlate with low fused VO rank,
    or has it *replaced* low rank as the suppression mechanism?
