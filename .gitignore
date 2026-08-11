@@ -231,3 +231,4 @@ data_cache/
 
 # fused_attn_svd: survey outputs (regenerate with norm_survey.py)
 fused_attn_svd/results/*.npz
+fused_attn_svd/results/DONE
