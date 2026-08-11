@@ -1,9 +1,10 @@
 # Handoff: Fused Attention Rank Analysis on Muse Glimmer 30B
 
-**Status:** context-gathering complete, no experiment run yet.
+**Status:** experiment run and analyzed — see §10 for results. Open questions
+1, 2, 4, 6, 7 of §8 are answered; §6 (bias/mean decomposition) remains.
 **Branch:** `glimmer-fused-vo` in `shared-subspaces`.
 **Target hardware:** one 80 GB A100 (to be reserved).
-**Date compiled:** 2026-08-11.
+**Date compiled:** 2026-08-11. Results appended 2026-08-11 (session 2).
 
 This document is *context*, not a procedure. It collects what the prior `fused_attn_svd`
 work established, what Muse Glimmer's architecture actually is (verified against the HF
@@ -731,39 +732,184 @@ scipy, matplotlib, pandas, accelerate. Nothing compiles; no vLLM, no flash-attn.
 
 ## 8. Open questions, roughly in order of value
 
-1. **Does Glimmer show the low-rank early-layer pattern at all?** Ungated $W^{VO}$ across
-   all 52 layers vs. the DS-R1 curves. This is the whole ballgame.
-2. **Fused QK on the 13 NoPE layers.** First exact, full-head QK fusion available in any
-   model studied here. Given scale-free `qk_norm`, any low rank found there is *necessarily*
-   Case-2 misalignment. Clean result either way.
+1. ~~Does Glimmer show the low-rank early-layer pattern at all?~~ **Done — no. §10.1.**
+   Every one of the 1,664 fused VO heads sits at effective rank 123–128 of 128.
+2. ~~Fused QK on the 13 NoPE layers.~~ **Done — full rank, no Case-2. §10.2.**
 3. ~~Is the 6e-3 claim true, and is it true per head?~~ **Done — see §1.3.** Confirmed as a
    shape-independent per-matrix RMS target (Hyperball signature); *not* true per head, with
-   the spread growing with depth and concentrated in `gate_proj`. What remains is the full
-   depth profile (`norm_survey.py --layers all`) and, more importantly, whether per-head
-   gate norm predicts fused VO rank.
-4. **Gate statistics per head.** Mean/spread of $\sigma(x W^G_i)$ on calibration text. Are
-   there heads that are simply switched off? Does gate-off correlate with low fused VO rank,
-   or has it *replaced* low rank as the suppression mechanism?
+   the spread growing with depth and concentrated in `gate_proj`. The remaining join
+   (per-head gate norm vs fused VO rank) is now done too — §10.4.
+4. ~~Gate statistics per head.~~ **Done — the gate has replaced weight-space suppression;
+   a third of heads are closed on most tokens. §10.3.**
 5. **The bias/mean decomposition** of §6, at least on early layers, for both Glimmer and one
    older model where the low-rank pattern is known to be present (DS-R1 layer 2 or 8 is the
-   obvious target, and its sigmas are already computed).
-6. **GQA plateau structure.** Do the 16 heads sharing a KV head behave as a block?
-7. **Qwen3-8B as the ungated VO control**, to separate "gated architecture" from
-   "norm-controlled recipe."
+   obvious target, and its sigmas are already computed). **Still open — and now clearly
+   a DS-R1 question, since Glimmer has no low rank to explain (§10.6).**
+6. ~~GQA plateau structure.~~ **Done — no plateaus, because nothing is low-rank; and GQA
+   turns out to matter for a different reason (§10.6).**
+7. ~~Qwen3-8B as the ungated VO control.~~ **Done — also spectrally saturated, which
+   redirects the whole interpretation. §10.5.**
 
 ---
 
 ## 9. Chris's standing view, for calibration
 
-He has never been sure what the low-rank finding is *for*, beyond "seems like a bit of a
-waste of capacity." Worth knowing when deciding what to report: the deliverable that would
-actually move his thinking is **evidence about *why* the low rank is there**, not another
-compression ratio. Specifically —
+He has never been sure what the low-rank finding is *for*, beyond "seems like a bit of a waste of capacity." Worth knowing when deciding what to report: the deliverable that would actually move his thinking is **evidence about *why* the low rank is there**, not another compression ratio. Specifically —
 
 - Is it *functional* (early layers genuinely need few directions)?
 - Is it *suppression* (the model turning a head off through weight magnitude)?
 - Is it *bias* (the head's dominant directions are constant-output, per §6)?
 - Is it an *optimization artifact* that a norm-controlled recipe removes?
 
-Glimmer is unusually well-suited to separating these because it has independently removed
-two of the four mechanisms by construction.
+Glimmer is unusually well-suited to separating these because it has independently removed two of the four mechanisms by construction.
+
+---
+
+## 10. Results (2026-08-11, session 2)
+
+**Code:** `fused_rank_survey.py` (streamed per-head SVD sweep, both models),
+`plot_fused_ranks.py` (figs 4–7 + `results/fused_rank_summary.txt`),
+`gate_stats.py` (gate activations on calibration text), `plot_gate_stats.py`
+(fig 8). Sigma arrays are in the HF dataset `ChrisMcCormick/svd-attn-singvals`
+(`glimmer_sigmas.npz`, `qwen3-8b_sigmas.npz`, `glimmer_gate_stats.npz`);
+per-head effective ranks are committed as CSVs in `results/`.
+
+Method notes: fused sigmas computed with the thin-QR trick of §7 (verified on
+real layer-3 weights against dense fp64 SVD: max relative error ~1e-5, orders
+of magnitude below anything that could move a rank count); `input_layernorm`
+folded as $(1+\gamma)$ per §3.5; per-head RMS reported on raw weights matching
+`norm_survey.py`; effective rank = `get_rank_for_error_threshold` at 0.1%
+energy loss (er999), matching the notebooks. Calibration anchor: an i.i.d.
+Gaussian $(6656{\times}128)(128{\times}6656)$ product scores er999 = 128 in
+every trial, stable rank 90 ± 1.
+
+### 10.1 Headline: the low-rank pathology is completely absent in Glimmer
+
+Per-head fused $W^{VO}$, er999, all layers (fig 4):
+
+| model | overall min/med | first-25%-depth min/med | heads < 100 (early) |
+|---|---|---|---|
+| **Glimmer 30B** | **123 / 127** | 124 / 127 | **0.0%** (0.0%) |
+| Qwen3-8B | 111 / 128 | 111 / 128 | 0.0% (0.0%) |
+| DeepSeek-R1 | 2 / 126 | 2 / 85 | 20.4% (63.2%) |
+| Kimi-K2 | 1 / 128 | 1 / 103 | 20.0% (47.5%) |
+
+Both sides are full too — V, O, Q, K, G per-head spectra all ≥ ~125 everywhere
+(fig 5) — so there is no Case 1 and no Case 2 anywhere in the model. No GQA
+plateaus either: |median(group 0) − median(group 1)| ≤ 3 counts at every layer.
+The late-layer v/k norm spikes flagged in §1.3 (v max/min 2.01 at L48) have
+**no rank signature** (V er999 ≥ 125 there): amplitude reallocation, not
+structural change. `o_proj` has zero dead channels (no column norm below
+0.25× median anywhere) — every head-channel writes.
+
+Stable rank adds the continuum the threshold metric hides: DS-R1's early
+fused-VO heads sit at stable rank **~2** (median at L2; effectively rank-2
+action), Glimmer at 37 (3–84), Qwen3-8B at 40, random product 90. So
+Glimmer/Qwen3 heads are far from generic — their spectra decay meaningfully,
+i.e. real specialization — but nothing approaches collapse, and no head ever
+drops energy below the 99.9% threshold before rank ~123.
+
+Practical corollary: **there is zero FaRR truncation opportunity in Glimmer**
+(or Qwen3-8B). The compression reading of the fused-rank work is dead for this
+class of model; what survives is the diagnostic reading.
+
+### 10.2 QK on the 13 NoPE layers: no misalignment
+
+The cleanest fused-QK test available anywhere (exact full-head fusion, and
+scale-free `qk_norm` means any low rank would necessarily be Case-2): per-head
+fused QK er999 is **125–128 (median 127)** on all 13 layers, with Q heads at
+128 and K heads at 126–127. The Δ=0 fixed-offset product on the 39 RoPE
+sliding layers (analysis object only) sits at median 124, min 103 — even the
+inexact version is near-saturated. Layer-level structure: the stacked QK key
+side runs at 234–255 of its 256 ceiling, the stacked VO read side at 252–255
+of 256 — the model uses essentially all of the structural GQA bottleneck the
+architecture gives it.
+
+### 10.3 Where suppression went: the gate (262,144 tokens of wikitext-103)
+
+Per-head mean gate openness $\mathbb{E}_t[\text{mean}_c\,\sigma(xW^G_i)]$:
+median **0.163** across all 1,664 heads (min 0.017, max 0.637). **32% of heads
+are closed (openness < 0.1) on more than half of tokens; 29% have mean
+openness below 0.1.** Per-token switchiness (std of openness) has median
+0.054 — heads mostly hold a characteristic openness level rather than
+toggling wildly, though the most bimodal heads reach 0.15.
+
+So head suppression did not disappear from Glimmer — it moved out of the
+weights and into runtime. What DeepSeek/Kimi express by destroying a head's
+weight spectrum, Glimmer expresses as a data-dependent gate that keeps the
+head's full-rank machinery intact and simply doesn't fire it on most tokens.
+
+### 10.4 The joins (the §1.3 leftover, answered)
+
+Within-layer median Spearman ρ, per head, all 52 layers:
+
+| pair | ρ | reading |
+|---|---|---|
+| gate RMS ↔ VO er999 | −0.12 | nothing to predict — er999 has no variance |
+| gate RMS ↔ VO stable rank | −0.39 | stronger gates ↔ more concentrated spectra |
+| gate RMS ↔ VO $\sigma_1$ | +0.65 | stronger gates ↔ bigger write amplitude |
+| gate RMS ↔ o_proj head RMS | +0.71 | same, seen in raw norms |
+| gate RMS ↔ runtime openness | **−0.65** | stronger gates ↔ *more-closed* heads |
+| openness ↔ VO $\sigma_1$ | −0.45 | high-amplitude heads fire *rarely* |
+
+That is a coherent head profile: the model builds **high-amplitude, full-rank,
+strongly-gated heads that are closed most of the time** — decisive specialists
+— alongside weaker-gated, always-half-open generalists. §1.3's observation
+that `gate_proj` carries the widest per-head norm spread now has its
+functional meaning: gate norm sets sigmoid saturation, and saturation resolves
+on real text to *mostly off*. Head differentiation in Glimmer is expressed in
+amplitude and gating — never in rank.
+
+### 10.5 The Qwen3-8B control redirects the interpretation
+
+Qwen3-8B — no norm pinning (§1.3: ratios 1.9–4.3), no attention gate, ordinary
+recipe — is **also spectrally saturated everywhere** (min 111, that one head at
+L5, inside its early-layer norm excursion). So the low-rank pathology is *not*
+the default state of attention that Glimmer's exotic recipe fixed. Two
+dense-GQA models at very different scales and training styles both lack it;
+the two models that have it are both MLA. Wen's Hyperball observation is real
+(§1.3) but is evidently not the variable that decides rank health.
+
+### 10.6 What this says about *why* (Chris's four readings, §9)
+
+- **Functional** ("early layers need few directions") — refuted. Two capable
+  models run early layers at full rank; the task does not require low rank.
+- **Suppression via weight magnitude** — refuted *for Glimmer* by construction
+  and by measurement, but confirmed as a *need*: the suppression function is
+  alive and heavily used, relocated into the gate (a third of heads
+  effectively off). Suppression is real; weight-rank is just one way to
+  implement it.
+- **Bias** (§6) — untested here, and now clearly a DS-R1 question: Glimmer has
+  no low rank to re-attribute. Still the top remaining item.
+- **Optimization artifact** — half right. It is an artifact (not task-driven),
+  but Qwen3 shows a norm-controlled recipe isn't what removes it. The live
+  hypothesis is now **architectural expressibility**: under GQA, Case 1's
+  usual carrier — a low-rank per-head $W^V$ — is *inexpressible per query
+  head* (V is shared by 16 query heads in Glimmer, 4 in Qwen3; killing it
+  kills the whole group). MLA gives every query head a private $W^V_i W^O_i$
+  pair, so per-head weight-space suppression is cheap to express — and with no
+  gate and no qk-norm, DeepSeek/Kimi had no cheaper channel. Where the
+  architecture provides a cheaper suppression channel (Glimmer's gate) or
+  makes the expensive one inexpressible (GQA's shared V), the weights stay
+  full-rank.
+
+Supporting fact from the prior work: DS-V3-Base and DS-R1 spectra are nearly
+identical — whatever creates the pattern happens in pretraining and is stable
+under RL, consistent with an architecture × optimization origin rather than a
+task-adaptation one.
+
+### 10.7 Follow-ups, in value order
+
+1. **§6 bias/mean decomposition on DS-R1 L2/L8** — unchanged, now sharpened:
+   it is the main candidate for explaining what the low-rank heads in MLA
+   models are actually *doing*.
+2. **Test the GQA-expressibility hypothesis on another MLA model with a
+   modern recipe** — DeepSeek-V2-Lite (16B MLA, no gate) is the cheap
+   discriminator: if MLA per se (not scale/recipe) invites the pathology, it
+   should show it.
+3. **Gate stats on non-wikitext distributions** (chat, code) — openness levels
+   may be domain-dependent; the rank results are weights-only and unaffected.
+4. Per-head gate norm as a *predictor* is settled (10.4); the interesting
+   remaining join is per-token: which heads open *together* (gate
+   co-activation structure), which is a cheap follow-on to `gate_stats.py`.
+

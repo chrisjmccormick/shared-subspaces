@@ -1,6 +1,18 @@
 # SVD Analysis of Fused Attention Head Matrices
 
-This project focuses on calculating and analyzing the singular values (SVD) of the weight matrices in Multihead Latent Attention (MLA) models such as DeepSeek-V3, DeepSeek-R1, and Kimi-K2.
+This project focuses on calculating and analyzing the singular values (SVD) of the weight matrices in Multihead Latent Attention (MLA) models such as DeepSeek-V3, DeepSeek-R1, and Kimi-K2 — and, as of August 2026, the dense-GQA models Muse Glimmer 30B and Qwen3-8B as contrasts.
+
+**Headline result (2026-08):** the low-rank fused-VO pathology of the MLA models is completely absent in both GQA models — every Glimmer head sits at effective rank 123–128 of 128 (DS-R1's early layers drop to single digits) — while Glimmer's suppression function has moved into its attention output gate: on calibration text, a third of its heads are closed on most tokens. See `HANDOFF-glimmer-fused-attention.md` §10 for the full results, figures `fig4`–`fig8`, and `results/fused_rank_summary.txt` for the numbers.
+
+## Scripts (Glimmer / Qwen3-8B survey)
+
+All weight surveys stream tensors from the HF Hub via HTTP range reads (`hf_stream.py`) — zero disk, works on any box:
+
+* `norm_survey.py` / `plot_norms.py` — per-matrix and per-head weight-RMS survey (the Hyperball / 6e-3 question; figs 1–3).
+* `fused_rank_survey.py` / `plot_fused_ranks.py` — per-head singular values for Q/K/V/O/gate, fused VO and QK (thin-QR trick, nothing d×d materialized), stacked-head spectra (figs 4–7).
+* `gate_stats.py` / `plot_gate_stats.py` — per-head attention-gate activations on wikitext calibration text; needs the checkpoint downloaded and `transformers` from git main (fig 8).
+
+Singular-value arrays for all surveyed models live in the HF dataset [`ChrisMcCormick/svd-attn-singvals`](https://huggingface.co/datasets/ChrisMcCormick/svd-attn-singvals).
 
 Some key concepts are:
 

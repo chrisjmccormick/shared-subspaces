@@ -1,0 +1,41 @@
+== fused VO effective rank (99.9% energy), per-head ==
+ Glimmer 30B: overall min/med 123/127 | first-25%-depth min/med 124/127 | heads<100: 0.0% (early 0.0%)
+    Qwen3-8B: overall min/med 111/128 | first-25%-depth min/med 111/128 | heads<100: 0.0% (early 0.0%)
+ DeepSeek-R1: overall min/med 2/126 | first-25%-depth min/med 2/85 | heads<100: 20.4% (early 63.2%)
+     Kimi-K2: overall min/med 1/128 | first-25%-depth min/med 1/103 | heads<100: 20.0% (early 47.5%)
+
+== Glimmer QK (per-head, 99.9% energy) ==
+  NoPE layers (exact):     min/med/max 125/127/128  heads<100: 0.0%
+  sliding (Δ=0 analysis):  min/med/max 103/124/127
+
+== gate-norm join (Glimmer) ==
+  gate RMS vs VO er999       : pooled ρ -0.11, median within-layer ρ -0.12
+  gate RMS vs VO stable rank : pooled ρ -0.37, median within-layer ρ -0.39
+  gate RMS vs VO sigma1      : pooled ρ +0.56, median within-layer ρ +0.65
+  gate RMS vs o_proj head RMS : pooled ρ +0.63, median within-layer ρ +0.71
+
+== GQA group structure (Glimmer fused VO er999) ==
+  |median(group0) − median(group1)| per layer: max 3.0, median 0.5
+
+== late-layer KV side (Glimmer) ==
+  L40: V er999 [128, 128] K er999 [127, 126] V head RMS ratio 1.17
+  L41: V er999 [128, 127] K er999 [127, 126] V head RMS ratio 1.06
+  L42: V er999 [128, 127] K er999 [127, 127] V head RMS ratio 1.02
+  L43: V er999 [128, 127] K er999 [127, 127] V head RMS ratio 1.38
+  L44: V er999 [127, 127] K er999 [126, 121] V head RMS ratio 1.84
+  L45: V er999 [127, 127] K er999 [125, 126] V head RMS ratio 1.09
+  L46: V er999 [127, 128] K er999 [125, 126] V head RMS ratio 1.06
+  L47: V er999 [128, 126] K er999 [127, 127] V head RMS ratio 1.21
+  L48: V er999 [125, 128] K er999 [118, 126] V head RMS ratio 2.01
+  L49: V er999 [128, 127] K er999 [126, 125] V head RMS ratio 1.04
+  L50: V er999 [128, 126] K er999 [126, 124] V head RMS ratio 1.21
+  L51: V er999 [127, 127] K er999 [127, 127] V head RMS ratio 1.11
+
+== o_proj channel write amplitude (Glimmer) ==
+  channels with col-norm < 0.25×median: max over layers 0.00% (layer 0), model-wide mean 0.00%
+
+== stacked / whole-layer objects (Glimmer, er999) ==
+  VO_read  : min/med/max 252/254/255 of 256
+  VO_write : min/med/max 3718/3861/3925 of 4096
+  QK_query : min/med/max 3337/3706/3930 of 4096
+  QK_key   : min/med/max 234/249/255 of 256
