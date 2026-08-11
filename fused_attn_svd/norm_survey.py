@@ -19,9 +19,14 @@ Answers two questions from the handoff doc:
 
 Usage:
     python norm_survey.py                          # Glimmer, a sample of layers
-    python norm_survey.py --layers all             # every layer (~60 GB of ranged reads)
+    python norm_survey.py --layers all             # every layer (~50 GB of ranged reads)
     python norm_survey.py --model qwen3-8b         # the contrast model
-    python norm_survey.py --csv out.csv            # also write tidy rows
+    python norm_survey.py --csv out.csv            # tidy per-matrix rows
+    python norm_survey.py --npz out.npz            # full per-head RMS + per-row norms
+
+The .npz is worth writing on any long run: a full sweep is ~50 GB of network reads, and
+the per-head/per-row arrays are what the plots need. Keys are "<layer>|<matrix>|head" and
+"<layer>|<matrix>|row".
 """
 
 from __future__ import annotations
@@ -29,7 +34,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
+import time
 
+import numpy as np
 import torch
 from huggingface_hub import HfFileSystem
 
@@ -87,6 +95,8 @@ def main() -> None:
     ap.add_argument("--layers", default="sample",
                     help="'sample' (default), 'all', or a comma list like 0,3,25,51")
     ap.add_argument("--csv", default=None, help="write tidy per-matrix rows here")
+    ap.add_argument("--npz", default=None,
+                    help="write full per-head RMS and per-row norm arrays here")
     args = ap.parse_args()
 
     spec = MODELS[args.model]
@@ -120,6 +130,9 @@ def main() -> None:
     print("-" * len(hdr))
 
     rows = []
+    arrays: dict[str, np.ndarray] = {}
+    t0 = time.time()
+    seen_bytes = 0
     ck = RemoteSafetensors(spec["repo"])
     try:
         for L in layers:
@@ -127,6 +140,7 @@ def main() -> None:
                 name = f"{spec['prefix']}.{L}.{mat}.weight"
                 if name not in ck.weight_map:
                     continue
+                seen_bytes += ck.nbytes(name)
                 W = ck.get(name, dtype=torch.float32)
 
                 rms = W.pow(2).mean().sqrt().item()
@@ -140,6 +154,10 @@ def main() -> None:
                 else:
                     hmin, hmax = h.min().item(), h.max().item()
                     ratio = hmax / hmin
+                    if args.npz:
+                        arrays[f"{L}|{mat}|head"] = h.numpy()
+                if args.npz:
+                    arrays[f"{L}|{mat}|row"] = row_norms.numpy().astype(np.float32)
 
                 print(f"{L:>5} {mat:<20}{str(tuple(W.shape)):>16}{rms:>12.4e}"
                       f"{rms / target:>9.4f}{hmin:>14.4e}{hmax:>12.4e}"
@@ -148,7 +166,13 @@ def main() -> None:
                                  ratio_to_target=rms / target, head_rms_min=hmin,
                                  head_rms_max=hmax, head_max_over_min=ratio,
                                  row_norm_cv=row_cv))
-                del W
+                del W, row_norms
+            el = time.time() - t0
+            gb = seen_bytes / 2**30
+            done = layers.index(L) + 1
+            eta = el / done * (len(layers) - done)
+            print(f"      [layer {done}/{len(layers)}  {gb:.1f} GiB read  "
+                  f"{el/60:.1f} min elapsed  ~{eta/60:.1f} min left]", flush=True)
             print()
     finally:
         ck.close()
@@ -159,6 +183,10 @@ def main() -> None:
             w.writeheader()
             w.writerows(rows)
         print(f"wrote {len(rows)} rows -> {args.csv}")
+
+    if args.npz:
+        np.savez_compressed(args.npz, **arrays)
+        print(f"wrote {len(arrays)} arrays -> {args.npz}")
 
 
 if __name__ == "__main__":
